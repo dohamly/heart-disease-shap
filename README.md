@@ -1,5 +1,7 @@
 # 🫀 Heart Disease Prediction + Explainable AI (SHAP)
 
+![CI](https://github.com/dohamly/-Heart-Disease-SHAP/actions/workflows/ci.yml/badge.svg)
+
 Prédiction du risque de maladie cardiaque à partir de données cliniques, avec **explicabilité complète des prédictions via SHAP**.
 
 > ⚠️ **Avertissement** : ce projet est un exercice académique de machine learning / explicabilité. Il ne constitue en aucun cas un outil de diagnostic médical et ne doit pas être utilisé pour une décision clinique réelle.
@@ -42,16 +44,73 @@ heart-disease-shap/
 │   ├── train.py                   # Entraînement et comparaison des modèles
 │   └── explain.py                 # Génération des graphiques SHAP
 │
+├── api/
+│   ├── main.py                    # API FastAPI (/predict, /explain, /health)
+│   └── schemas.py                 # Modèles Pydantic (validation des requêtes)
+│
+├── tests/
+│   ├── test_preprocessing.py      # Tests unitaires du pipeline de données
+│   └── test_api.py                # Tests unitaires de l'API
+│
+├── .github/workflows/
+│   └── ci.yml                     # GitHub Actions : tests lancés à chaque push
+│
 ├── models/
 │   ├── best_model.joblib          # Meilleur modèle + scaler sauvegardés
 │   └── results.json               # Métriques de tous les modèles
 │
 ├── reports/                       # Graphiques pour ce README
-├── app.py                         # Application Streamlit
+├── web/
+│   └── index.html                 # Dashboard front-end autonome (design personnalisé)
+├── app.py                         # Application Streamlit (alternative tout-en-un)
 ├── requirements.txt
 ├── README.md
 └── .gitignore
 ```
+
+## 🏗️ Architecture
+
+Le projet propose **trois façons** d'utiliser le modèle, qui illustrent trois approches différentes :
+
+| Interface | Ce qu'elle montre | Lancer |
+|---|---|---|
+| `web/index.html` | Frontend autonome (HTML/CSS/JS), calcul exact des coefficients du modèle en JS | Ouvrir le fichier directement dans un navigateur |
+| `app.py` (Streamlit) | Prototype rapide tout-en-un, Python de bout en bout | `streamlit run app.py` |
+| `api/main.py` (FastAPI) | Vraie séparation front/back — un **backend** qui sert le modèle scikit-learn via une API REST, appelable par n'importe quel client | `uvicorn api.main:app --reload` |
+
+### Utiliser l'API
+
+```bash
+uvicorn api.main:app --reload
+# Documentation interactive : http://127.0.0.1:8000/docs
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"age":63,"sex":1,"cp":3,"trestbps":145,"chol":233,"fbs":1,"restecg":0,"thalach":150,"exang":0,"oldpeak":2.3,"slope":0,"ca":0,"thal":1}'
+```
+
+Réponse :
+```json
+{
+  "prediction": 1,
+  "prediction_label": "Heart disease detected",
+  "probability_disease": 0.6682,
+  "probability_no_disease": 0.3318,
+  "model_name": "Logistic Regression"
+}
+```
+
+`/explain` renvoie en plus la décomposition SHAP complète (contribution de chaque variable).
+
+### Tests
+
+```bash
+pytest tests/ -v
+```
+
+7 tests couvrant le pipeline de preprocessing et les endpoints de l'API. Lancés automatiquement par GitHub Actions à chaque push (voir le badge en haut de ce README une fois le repo poussé).
 
 ## 🔬 Dataset
 
