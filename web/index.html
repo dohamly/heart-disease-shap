@@ -128,7 +128,7 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
 <div class="main">
   <div class="topbar">
     <div><h1 id="pageTitle">Dashboard</h1><p>Heart Disease Prediction + Explainable AI</p></div>
-    <div class="status"><span class="dot"></span>Model loaded · Logistic Regression</div>
+    <div class="status" id="apiStatus"><span class="dot"></span>Model loaded · Logistic Regression</div>
   </div>
 
   <div class="content">
@@ -330,6 +330,20 @@ const BASE={age:0,sex:0.681818,trestbps:0,chol:0,fbs:0.140496,thalach:0,exang:0.
 const LABELS={age:"Age",sex:"Sex",trestbps:"Resting Blood Pressure",chol:"Cholesterol",fbs:"Fasting Blood Sugar",thalach:"Max Heart Rate",exang:"Exercise-induced Angina",oldpeak:"ST Depression",ca:"Major Vessels",cp_0:"Chest Pain: Typical angina",cp_1:"Chest Pain: Atypical angina",cp_2:"Chest Pain: Non-anginal",cp_3:"Chest Pain: Asymptomatic",restecg_0:"Resting ECG: Normal",restecg_1:"Resting ECG: ST-T abnorm.",restecg_2:"Resting ECG: LV hypertrophy",slope_0:"ST Slope: Upsloping",slope_1:"ST Slope: Flat",slope_2:"ST Slope: Downsloping",thal_0:"Thalassemia: Unknown",thal_1:"Thalassemia: Fixed defect",thal_2:"Thalassemia: Normal",thal_3:"Thalassemia: Reversible"};
 const GLOBAL=[["cp_0",0.5839],["ca",0.4406],["sex",0.4261],["thal_3",0.4136],["chol",0.402],["thal_2",0.3775],["oldpeak",0.3761],["exang",0.3481]];
 
+(async function checkApiOnLoad(){
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(()=>controller.abort(), 1500);
+    const res = await fetch("http://127.0.0.1:8000/health", {signal: controller.signal});
+    clearTimeout(t);
+    if(res.ok){
+      document.getElementById("apiStatus").innerHTML = '<span class="dot"></span>Live API connected · Logistic Regression';
+    }
+  } catch(e){
+    document.getElementById("apiStatus").innerHTML = '<span class="dot" style="background:var(--sub)"></span>API offline — local calculation';
+  }
+})();
+
 document.querySelectorAll(".nav-item").forEach(el=>el.addEventListener("click",()=>goTo(el.dataset.page)));
 function goTo(p){
   document.querySelectorAll(".nav-item").forEach(n=>n.classList.toggle("active",n.dataset.page===p));
@@ -358,16 +372,61 @@ function buildVector(){
   return vec;
 }
 
-function runPrediction(){
-  const vec=buildVector();
+const API_BASE = "http://127.0.0.1:8000";
+
+function rawPatient(){
+  return {
+    age:+document.getElementById("f_age").value, sex:+document.querySelector('input[name="f_sex"]:checked').value,
+    cp:+document.getElementById("f_cp").value, trestbps:+document.getElementById("f_trestbps").value,
+    chol:+document.getElementById("f_chol").value, thalach:+document.getElementById("f_thalach").value,
+    restecg:+document.getElementById("f_restecg").value, oldpeak:+document.getElementById("f_oldpeak").value,
+    slope:+document.getElementById("f_slope").value, ca:+document.getElementById("f_ca").value,
+    thal:+document.getElementById("f_thal").value,
+    fbs:document.getElementById("sw_fbs").classList.contains("on")?1:0,
+    exang:document.getElementById("sw_exang").classList.contains("on")?1:0,
+  };
+}
+
+async function callApi(patient){
+  const controller = new AbortController();
+  const timeout = setTimeout(()=>controller.abort(), 2000);
+  const res = await fetch(`${API_BASE}/explain`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(patient), signal: controller.signal,
+  });
+  clearTimeout(timeout);
+  if(!res.ok) throw new Error("API error " + res.status);
+  const data = await res.json();
+  return {
+    proba: data.prediction.probability_disease,
+    pred: data.prediction.prediction,
+    contrib: Object.fromEntries(data.contributions.map(c => [c.feature, c.value])),
+    source: "api",
+  };
+}
+
+function computeLocally(patient){
+  const vec={age:patient.age,sex:patient.sex,trestbps:patient.trestbps,chol:patient.chol,fbs:patient.fbs,thalach:patient.thalach,exang:patient.exang,oldpeak:patient.oldpeak,ca:patient.ca};
+  ["cp_0","cp_1","cp_2","cp_3"].forEach(k=>vec[k]=0); vec["cp_"+patient.cp]=1;
+  ["restecg_0","restecg_1","restecg_2"].forEach(k=>vec[k]=0); vec["restecg_"+patient.restecg]=1;
+  ["slope_0","slope_1","slope_2"].forEach(k=>vec[k]=0); vec["slope_"+patient.slope]=1;
+  ["thal_0","thal_1","thal_2","thal_3"].forEach(k=>vec[k]=0); vec["thal_"+patient.thal]=1;
+  NUMERIC.forEach(c=>vec[c]=(vec[c]-SMEAN[c])/SSCALE[c]);
+
   let logit=INTERCEPT; const contrib={};
   COLUMNS.forEach((c,i)=>{ logit+=COEF[i]*vec[c]; contrib[c]=COEF[i]*(vec[c]-BASE[c]); });
   const proba=1/(1+Math.exp(-logit));
-  const pred=proba>=0.5?1:0;
+  return { proba, pred: proba>=0.5?1:0, contrib, source: "local" };
+}
 
+function renderResult({proba, pred, contrib, source}){
   const card=document.getElementById("predResultCard");
+  const sourceTag = source==="api"
+    ? `<span style="font-size:10.5px;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:99px;margin-left:8px">● Live API</span>`
+    : `<span style="font-size:10.5px;color:var(--sub);background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:99px;margin-left:8px">Calcul local (API hors ligne)</span>`;
+
   card.innerHTML=`<div class="card"><div class="result-banner ${pred?'risk':'safe'}">
-    <div><b>${pred?'Heart disease detected':'No heart disease detected'}</b>
+    <div><b>${pred?'Heart disease detected':'No heart disease detected'}</b>${sourceTag}
     <div style="font-size:12px;margin-top:4px;opacity:.85">Disease: ${(proba*100).toFixed(1)}% · No disease: ${((1-proba)*100).toFixed(1)}%</div></div>
     </div>
     <div class="bar-track" style="max-width:100%;margin-bottom:4px"><div class="bar-fill" style="width:${(proba*100).toFixed(1)}%;background:${pred?'var(--red)':'var(--green)'}"></div></div>
@@ -379,19 +438,36 @@ function runPrediction(){
   let rows=sorted.map(([k,v])=>{
     const pct=(Math.abs(v)/maxAbs*100).toFixed(0);
     const color=v>0?'var(--red)':'var(--green)';
-    const align=v>0?'flex-end':'flex-start';
-    return `<div class="bar-row"><span>${LABELS[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};margin-left:${v>0?0:'auto'}"></div></div><span style="color:${color};text-align:right">${v>0?'+':''}${v.toFixed(2)}</span></div>`;
+    const label = LABELS[k] || k;
+    return `<div class="bar-row"><span>${label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};margin-left:${v>0?0:'auto'}"></div></div><span style="color:${color};text-align:right">${v>0?'+':''}${v.toFixed(2)}</span></div>`;
   }).join("");
 
   const top=sorted[0], second=sorted[1];
   const dir=v=>v>0?"augmenté":"réduit";
+  const topLabel = LABELS[top[0]] || top[0];
+  const secondLabel = LABELS[second[0]] || second[0];
   document.getElementById("explainBody").innerHTML=`
-    <p style="font-size:12px;color:var(--sub);margin-bottom:14px"><span style="color:var(--red)">■</span> augmente le risque &nbsp; <span style="color:var(--green)">■</span> réduit le risque</p>
+    <p style="font-size:12px;color:var(--sub);margin-bottom:14px"><span style="color:var(--red)">■</span> augmente le risque &nbsp; <span style="color:var(--green)">■</span> réduit le risque ${sourceTag}</p>
     ${rows}
     <div class="warn" style="background:var(--accent-light);border-color:var(--border);color:var(--text);margin-top:16px">
-    <b>Explication :</b> ${LABELS[top[0]]} a le plus ${dir(top[1])} le risque (${top[1]>0?'+':''}${top[1].toFixed(2)}), suivi de ${LABELS[second[0]]} (${second[1]>0?'+':''}${second[1].toFixed(2)}). Score final : <b>${(proba*100).toFixed(1)}%</b> de probabilité de maladie cardiaque.</div>`;
+    <b>Explication :</b> ${topLabel} a le plus ${dir(top[1])} le risque (${top[1]>0?'+':''}${top[1].toFixed(2)}), suivi de ${secondLabel} (${second[1]>0?'+':''}${second[1].toFixed(2)}). Score final : <b>${(proba*100).toFixed(1)}%</b> de probabilité de maladie cardiaque.</div>`;
 
   goTo("explain");
+}
+
+async function runPrediction(){
+  const patient = rawPatient();
+  const btn = document.querySelector('[onclick="runPrediction()"]');
+  if(btn){ btn.disabled = true; btn.style.opacity = .6; }
+
+  try {
+    const result = await callApi(patient);
+    renderResult(result);
+  } catch (err) {
+    renderResult(computeLocally(patient));
+  } finally {
+    if(btn){ btn.disabled = false; btn.style.opacity = 1; }
+  }
 }
 
 const gmax=Math.max(...GLOBAL.map(e=>e[1]));
