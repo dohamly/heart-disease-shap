@@ -1,6 +1,6 @@
 # Heart Disease Prediction + Explainable AI (SHAP)
 
-![CI](https://github.com/dohamly/heart-disease-shap-/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/dohamly/heart-disease-shap/actions/workflows/ci.yml/badge.svg)
 
 Prédiction du risque de maladie cardiaque à partir de 13 variables cliniques, avec **explication de chaque prédiction par SHAP**, une évaluation par **validation croisée imbriquée** et une **analyse des erreurs**.
 
