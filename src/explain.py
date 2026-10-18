@@ -22,7 +22,8 @@ def get_explainer(model, X_train):
     model_type = type(model).__name__
     if model_type in ("RandomForestClassifier", "XGBClassifier"):
         return shap.TreeExplainer(model)
-    return shap.LinearExplainer(model, X_train)
+    masker = shap.maskers.Independent(X_train, max_samples=len(X_train))
+    return shap.LinearExplainer(model, masker)
 
 
 def main():

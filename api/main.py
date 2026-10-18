@@ -145,7 +145,10 @@ def explain(patient: PatientInput):
     if type(model).__name__ in ("RandomForestClassifier", "XGBClassifier"):
         explainer = shap.TreeExplainer(model)
     else:
-        explainer = shap.LinearExplainer(model, get_background())
+        bg = get_background()
+        explainer = shap.LinearExplainer(
+            model, shap.maskers.Independent(bg, max_samples=len(bg))
+        )
 
     shap_values = explainer(row)
     if len(shap_values.shape) == 3:

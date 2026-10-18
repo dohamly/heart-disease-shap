@@ -44,3 +44,21 @@ def test_explain_returns_contributions():
     data = r.json()
     assert len(data["contributions"]) == 23
     assert "prediction" in data
+
+
+def test_predict_is_medically_consistent():
+    """Un profil à haut risque doit avoir une probabilité de maladie plus élevée qu'un profil à faible risque."""
+    high = {"age": 62, "sex": 1, "cp": 0, "trestbps": 140, "chol": 270, "fbs": 0, "restecg": 1,
+            "thalach": 110, "exang": 1, "oldpeak": 3.0, "slope": 1, "ca": 3, "thal": 3}
+    low = {"age": 40, "sex": 0, "cp": 2, "trestbps": 120, "chol": 200, "fbs": 0, "restecg": 0,
+           "thalach": 175, "exang": 0, "oldpeak": 0.0, "slope": 2, "ca": 0, "thal": 2}
+    p_high = client.post("/predict", json=high).json()["probability_disease"]
+    p_low = client.post("/predict", json=low).json()["probability_disease"]
+    assert p_high > 0.8 and p_low < 0.2
+
+
+def test_explain_sign_convention():
+    """Une angine d'effort doit AUGMENTER le risque (contribution SHAP positive)."""
+    with_angina = {**PATIENT, "exang": 1}
+    contribs = {c["feature"]: c["value"] for c in client.post("/explain", json=with_angina).json()["contributions"]}
+    assert contribs["exang"] > 0

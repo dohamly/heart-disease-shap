@@ -128,7 +128,7 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
 <div class="main">
   <div class="topbar">
     <div><h1 id="pageTitle">Dashboard</h1><p>Heart Disease Prediction + Explainable AI</p></div>
-    <div class="status"><span class="dot"></span>Model loaded · Logistic Regression</div>
+    <div class="status" id="apiStatus"><span class="dot"></span>Model loaded · Logistic Regression</div>
   </div>
 
   <div class="content">
@@ -141,13 +141,13 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
         <p>Cette application prédit le risque de maladie cardiaque coronarienne à partir des données cliniques d'un patient, et explique chaque prédiction avec des valeurs SHAP exactes.</p>
         <button class="btn" onclick="goTo('prediction')">Start Prediction →</button>
       </div>
-      <div class="grid4">
-        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div><b>80.3%</b><div class="lbl">Model Accuracy</div><div class="sub">On test set</div></div>
-        <div class="stat"><div class="icn" style="background:#eaf0ff;color:#3b6fe0"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg></div><b>0.885</b><div class="lbl">ROC-AUC</div><div class="sub">Bonne discrimination</div></div>
+      <!--AUTO:dash-stats--><div class="grid4">
+        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div><b>83.2%</b><div class="lbl">Model Accuracy</div><div class="sub">Nested 5-fold CV</div></div>
+        <div class="stat"><div class="icn" style="background:#eaf0ff;color:#3b6fe0"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg></div><b>0.906</b><div class="lbl">ROC-AUC</div><div class="sub">Nested 5-fold CV</div></div>
         <div class="stat"><div class="icn" style="background:#f2eaff;color:#7c4dcf"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 12.2a5 5 0 0 1 6 4.9"/></svg></div><b>303</b><div class="lbl">Patients Analyzed</div><div class="sub">Cleveland UCI dataset</div></div>
-        <div class="stat"><div class="icn" style="background:#fff2e3;color:#d97a1f"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></div><b>LogReg</b><div class="lbl">Model Used</div><div class="sub">Best F1-score</div></div>
+        <div class="stat"><div class="icn" style="background:#fff2e3;color:#d97a1f"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/></svg></div><b>LogReg</b><div class="lbl">Model Used</div><div class="sub">Simplest within 1 SE of best</div></div>
       </div>
-      <div class="card">
+      <!--/AUTO:dash-stats--><div class="card">
         <h3>How the AI Works</h3>
         <p class="desc">End-to-end pipeline from raw data to explainable prediction</p>
         <div class="steps">
@@ -198,9 +198,7 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
       <div class="card">
         <div class="section-head"><span class="num">2</span><h3>Clinical Information</h3></div>
         <div class="formgrid">
-          <div class="field"><label>Chest Pain Type</label><select id="f_cp">
-            <option value="0">Typical angina</option><option value="1">Atypical angina</option>
-            <option value="2">Non-anginal pain</option><option value="3" selected>Asymptomatic</option></select></div>
+          <div class="field"><label>Chest Pain Type</label><select id="f_cp"><!--AUTO:opt-f_cp--><option value="0" selected>Asymptomatic</option><option value="1">Atypical angina</option><option value="2">Non-anginal pain</option><option value="3">Typical angina</option><!--/AUTO:opt-f_cp--></select></div>
           <div class="field"><label>Resting Blood Pressure (mmHg)</label><input id="f_trestbps" type="number" value="130"></div>
           <div class="field"><label>Serum Cholesterol (mg/dl)</label><input id="f_chol" type="number" value="250"></div>
           <div class="field"><label>Maximum Heart Rate Achieved</label><input id="f_thalach" type="number" value="148"></div>
@@ -212,9 +210,9 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
       <div class="card">
         <div class="section-head"><span class="num">3</span><h3>Additional Clinical Data</h3></div>
         <div class="formgrid">
-          <div class="field"><label>Resting ECG</label><select id="f_restecg"><option value="0">Normal</option><option value="1">ST-T abnormality</option><option value="2">LV hypertrophy</option></select></div>
+          <div class="field"><label>Resting ECG</label><select id="f_restecg"><!--AUTO:opt-f_restecg--><option value="0" selected>Normal</option><option value="1">LV hypertrophy</option><option value="2">ST-T abnormality</option><!--/AUTO:opt-f_restecg--></select></div>
           <div class="field"><label>ST Depression (oldpeak)</label><input id="f_oldpeak" type="number" step="0.1" value="1.4"></div>
-          <div class="field"><label>ST Slope</label><select id="f_slope"><option value="0">Upsloping</option><option value="1">Flat</option><option value="2">Downsloping</option></select></div>
+          <div class="field"><label>ST Slope</label><select id="f_slope"><!--AUTO:opt-f_slope--><option value="0">Downsloping</option><option value="1" selected>Flat</option><option value="2">Upsloping</option><!--/AUTO:opt-f_slope--></select></div>
           <div class="field"><label>Number of Major Vessels (0–3)</label><select id="f_ca"><option>0</option><option>1</option><option>2</option><option>3</option></select></div>
           <div class="field" style="grid-column:1/2"><label>Thalassemia</label><select id="f_thal"><option value="1">Fixed defect</option><option value="2" selected>Normal</option><option value="3">Reversible defect</option></select></div>
         </div>
@@ -234,61 +232,50 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
     </div>
 
     <!-- PERFORMANCE -->
-    <div class="page" id="perf">
+    <div class="page" id="perf"><!--AUTO:perf-->
       <h3 style="font-size:19px;margin:2px 0 2px">Model Performance</h3>
-      <p class="desc" style="margin-bottom:18px">Evaluation metrics for the Logistic Regression classifier on the held-out test set (20% split)</p>
+      <p class="desc" style="margin-bottom:18px">Nested 5-fold stratified cross-validation, Logistic Regression: mean over the 5 outer folds (303 patients; hyperparameters tuned on the inner loop only)</p>
       <div class="grid5">
-        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div><b>80.3%</b><div class="lbl">Accuracy</div></div>
-        <div class="stat"><div class="icn" style="background:#eaf0ff;color:#3b6fe0"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></div><b>78.4%</b><div class="lbl">Precision</div></div>
-        <div class="stat"><div class="icn" style="background:#f2eaff;color:#7c4dcf"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg></div><b>87.9%</b><div class="lbl">Recall</div></div>
-        <div class="stat"><div class="icn" style="background:#fff2e3;color:#d97a1f"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div><b>82.9%</b><div class="lbl">F1 Score</div></div>
-        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5"/><rect x="12" y="9" width="3" height="9"/><rect x="17" y="6" width="3" height="12"/></svg></div><b>0.885</b><div class="lbl">ROC-AUC</div></div>
+        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></div><b>83.2%</b><div class="lbl">Accuracy</div><div class="sub">± 6.2 (std)</div></div>
+        <div class="stat"><div class="icn" style="background:#eaf0ff;color:#3b6fe0"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></div><b>83.7%</b><div class="lbl">Precision</div><div class="sub">± 5.0 (std)</div></div>
+        <div class="stat"><div class="icn" style="background:#f2eaff;color:#7c4dcf"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 7 4-14 2 7h6"/></svg></div><b>78.2%</b><div class="lbl">Recall</div><div class="sub">± 13.7 (std)</div></div>
+        <div class="stat"><div class="icn" style="background:#fff2e3;color:#d97a1f"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z"/></svg></div><b>80.4%</b><div class="lbl">F1 Score</div><div class="sub">± 8.3 (std)</div></div>
+        <div class="stat"><div class="icn" style="background:#e6f7f2;color:#0f9488"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="13" width="3" height="5"/><rect x="12" y="9" width="3" height="9"/><rect x="17" y="6" width="3" height="12"/></svg></div><b>0.906</b><div class="lbl">ROC-AUC</div><div class="sub">± 0.060 (std)</div></div>
       </div>
       <div class="grid2">
         <div class="card">
           <h3>Confusion Matrix</h3>
-          <p class="desc">Test set — 61 patients (Logistic Regression)</p>
+          <p class="desc">Out-of-fold predictions, 303 patients (Logistic Regression, threshold 0.5)</p>
           <div class="matrix">
-            <div></div><div style="color:var(--sub);font-size:11px">Pred: No</div><div style="color:var(--sub);font-size:11px">Pred: Yes</div>
-            <div style="color:var(--sub);font-size:11px;text-align:right;padding-right:6px">Actual: No</div><div class="mcell-tn"><b>20</b><br>TN</div><div class="mcell-fp"><b>8</b><br>FP</div>
-            <div style="color:var(--sub);font-size:11px;text-align:right;padding-right:6px">Actual: Yes</div><div class="mcell-fn"><b>4</b><br>FN</div><div class="mcell-tp"><b>29</b><br>TP</div>
+            <div></div><div style="color:var(--sub);font-size:11px">Pred: Healthy</div><div style="color:var(--sub);font-size:11px">Pred: Disease</div>
+            <div style="color:var(--sub);font-size:11px;text-align:right;padding-right:6px">Actual: Healthy</div><div class="mcell-tn"><b>144</b><br>TN</div><div class="mcell-fp"><b>21</b><br>FP</div>
+            <div style="color:var(--sub);font-size:11px;text-align:right;padding-right:6px">Actual: Disease</div><div class="mcell-fn"><b>30</b><br>FN</div><div class="mcell-tp"><b>108</b><br>TP</div>
           </div>
+          <p class="desc" style="margin-top:12px">30 of 138 diseased patients are missed (false negatives) — the costliest error type in a screening context.</p>
         </div>
         <div class="card">
           <h3>ROC Curve</h3>
-          <p class="desc">AUC = 0.885</p>
-          <svg viewBox="0 0 220 160" style="width:100%;max-width:280px">
-            <line x1="30" y1="10" x2="30" y2="140" stroke="var(--border)"/>
-            <line x1="30" y1="140" x2="210" y2="140" stroke="var(--border)"/>
-            <line x1="30" y1="140" x2="210" y2="10" stroke="var(--border)" stroke-dasharray="3,3"/>
-            <polyline fill="none" stroke="#0f9488" stroke-width="2.2" points="30,140 30,136 30,81 36,81 36,77 42,66 48,66 48,61 54,61 54,42 66,37 72,37 72,25 78,25 78,20 84,14 138,14 138,9 144,9 210,10"/>
-            <text x="8" y="14" font-size="7" fill="var(--sub)">1</text>
-            <text x="8" y="79" font-size="7" fill="var(--sub)">0.6</text>
-            <text x="6" y="112" font-size="7" fill="var(--sub)">0.4</text>
-            <text x="6" y="143" font-size="7" fill="var(--sub)">0</text>
-            <text x="26" y="152" font-size="7" fill="var(--sub)">0</text>
-            <text x="118" y="152" font-size="7" fill="var(--sub)">0.5</text>
-            <text x="196" y="152" font-size="7" fill="var(--sub)">1</text>
-            <text x="100" y="159" font-size="7" fill="var(--sub)">FPR</text>
-          </svg>
+          <p class="desc">AUC = 0.905 (out-of-fold, pooled)</p>
+          <svg viewBox="0 0 220 160" style="width:100%;max-width:280px"><line x1="30" y1="10" x2="30" y2="140" stroke="var(--border)"/><line x1="30" y1="140" x2="210" y2="140" stroke="var(--border)"/><line x1="30" y1="140" x2="210" y2="10" stroke="var(--border)" stroke-dasharray="3,3"/><polyline fill="none" stroke="#0f9488" stroke-width="2.2" points="30,91 34,71 39,58 44,44 48,40 52,39 57,35 62,31 66,30 70,28 75,26 80,24 84,24 88,23 93,20 98,19 102,18 106,17 111,17 116,15 120,15 124,15 129,15 134,14 138,14 142,14 147,14 152,14 156,14 160,13 165,12 170,12 174,12 178,12 183,12 188,11 192,11 196,11 201,11 206,10 210,10"/><text x="8" y="14" font-size="7" fill="var(--sub)">1</text><text x="6" y="79" font-size="7" fill="var(--sub)">0.5</text><text x="6" y="143" font-size="7" fill="var(--sub)">0</text><text x="26" y="152" font-size="7" fill="var(--sub)">0</text><text x="118" y="152" font-size="7" fill="var(--sub)">0.5</text><text x="196" y="152" font-size="7" fill="var(--sub)">1</text><text x="100" y="159" font-size="7" fill="var(--sub)">FPR</text></svg>
         </div>
       </div>
       <div class="card">
         <h3>Feature Importance (SHAP Global)</h3>
-        <p class="desc">Mean absolute SHAP value across the training set</p>
+        <p class="desc">Mean absolute SHAP value across the training set (higher = more influence on the predicted risk)</p>
         <div id="globalBars"></div>
       </div>
       <div class="card">
         <h3>Model Comparison</h3>
-        <p class="desc">Evaluated on the same stratified 80/20 test split</p>
+        <p class="desc">Nested 5-fold stratified CV — mean ± std across the 5 outer folds</p>
         <table>
-          <tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th><th>ROC-AUC</th></tr>
-          <tr style="background:var(--accent-light)"><td>Logistic Regression <span class="badge">Selected</span></td><td>80.3%</td><td>78.4%</td><td>87.9%</td><td><b>82.9%</b></td><td>0.885</td></tr>
-          <tr><td>Random Forest</td><td>78.7%</td><td>76.3%</td><td>87.9%</td><td>81.7%</td><td>0.899</td></tr>
-          <tr><td>XGBoost</td><td>77.1%</td><td>75.7%</td><td>84.9%</td><td>80.0%</td><td>0.862</td></tr>
+          <tr><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>Specificity</th><th>F1</th><th>ROC-AUC</th></tr>
+          <tr style="background:var(--accent-light)"><td>Logistic Regression <span class="badge">Selected</span></td><td>83.2 ± 6.2%</td><td>83.7 ± 5.0%</td><td>78.2 ± 13.7%</td><td>87.3 ± 4.0%</td><td>80.4 ± 8.3%</td><td>0.906 ± 0.060</td></tr>
+          <tr><td>Random Forest</td><td>84.8 ± 6.1%</td><td>85.8 ± 4.7%</td><td>79.7 ± 11.7%</td><td>89.1 ± 3.5%</td><td><b>82.4 ± 8.1%</b></td><td>0.912 ± 0.054</td></tr>
+          <tr><td>XGBoost</td><td>81.5 ± 5.9%</td><td>81.8 ± 4.6%</td><td>76.1 ± 11.0%</td><td>86.1 ± 3.5%</td><td>78.6 ± 7.7%</td><td>0.900 ± 0.046</td></tr>
         </table>
+        <p class="desc" style="margin-top:12px">Differences between models are smaller than the fold-to-fold variability (≈ ±0.08 F1): none is significantly better with 303 patients. Logistic Regression is kept as the simplest model within one standard error of the best.</p>
       </div>
-    </div>
+    <!--/AUTO:perf--></div>
 
     <!-- ABOUT -->
     <div class="page" id="about">
@@ -299,7 +286,7 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
       </div>
       <div class="grid2">
         <div class="card"><div class="icn" style="background:#e6f7f2;color:#0f9488;margin-bottom:12px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg></div><h3>Dataset</h3><p class="desc" style="margin:0">The Cleveland Heart Disease dataset from the UCI Machine Learning Repository contains 303 patient records with 13 clinical attributes. It is one of the most widely used benchmarks for cardiovascular disease classification research.</p></div>
-        <div class="card"><div class="icn" style="background:#e6f7f2;color:#0f9488;margin-bottom:12px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg></div><h3>Machine Learning</h3><p class="desc" style="margin:0">Three classifiers were trained and evaluated: Logistic Regression, Random Forest, and XGBoost, on a stratified 80/20 split. Logistic Regression was selected as the best performer with an F1-score of 82.9% and ROC-AUC of 0.885.</p></div>
+        <div class="card"><div class="icn" style="background:#e6f7f2;color:#0f9488;margin-bottom:12px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.04 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.04H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.04-1.56V3a2 2 0 0 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1.04H21a2 2 0 0 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg></div><h3>Machine Learning</h3><p class="desc" style="margin:0"><!--AUTO:about-ml-->Three classifiers were compared with nested 5-fold stratified cross-validation (hyperparameters tuned on the inner loop only). Their scores are statistically indistinguishable, so the simplest one, Logistic Regression, was selected (F1 80.4%, ROC-AUC 0.906).<!--/AUTO:about-ml--></p></div>
         <div class="card"><div class="icn" style="background:#f2eaff;color:#7c4dcf;margin-bottom:12px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3a2.5 2.5 0 0 0-2.45 2.03A3 3 0 0 0 5 8a3 3 0 0 0-1 5.83V16a3 3 0 0 0 3 3 2.5 2.5 0 0 0 2.5-2.5V5.5A2.5 2.5 0 0 0 9.5 3Z"/><path d="M14.5 3a2.5 2.5 0 0 1 2.45 2.03A3 3 0 0 1 19 8a3 3 0 0 1 1 5.83V16a3 3 0 0 1-3 3 2.5 2.5 0 0 1-2.5-2.5V5.5A2.5 2.5 0 0 1 14.5 3Z"/></svg></div><h3>Explainable AI</h3><p class="desc" style="margin:0">SHAP (SHapley Additive exPlanations) provides exact feature-level attribution for every prediction. Both global summaries (mean absolute SHAP across the training set) and local explanations (per-patient contribution breakdowns) are available.</p></div>
         <div class="card"><div class="icn" style="background:#fff2e3;color:#d97a1f;margin-bottom:12px"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="9" r="3"/><path d="M6 9v6M9 6h4a4 4 0 0 1 4 4v.5"/></svg></div><h3>Technologies Used</h3><p class="desc" style="margin:0">Python · Pandas · NumPy · Scikit-learn · SHAP · Matplotlib · Seaborn · Streamlit</p></div>
       </div>
@@ -320,15 +307,30 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
 </div>
 
 <script>
-const COLUMNS=["age","sex","trestbps","chol","fbs","thalach","exang","oldpeak","ca","cp_0","cp_1","cp_2","cp_3","restecg_0","restecg_1","restecg_2","slope_0","slope_1","slope_2","thal_0","thal_1","thal_2","thal_3"];
-const COEF=[0.053942,-0.982124,-0.146033,-0.510087,-0.136432,0.342159,-0.776835,-0.466978,-0.540551,-1.170675,-0.025799,0.612348,0.587063,-0.182302,0.316058,-0.130820,0.040408,-0.343860,0.306390,0.072994,0.029886,0.758306,-0.858249];
-const INTERCEPT=1.365173;
-const NUMERIC=["age","trestbps","chol","thalach","oldpeak","ca"];
-const SMEAN={age:54.289256,trestbps:131.706612,chol:244.884298,thalach:150.123967,oldpeak:1.071901,ca:0.743802};
-const SSCALE={age:9.134385,trestbps:17.957269,chol:47.748426,thalach:21.932492,oldpeak:1.203763,ca:1.040732};
-const BASE={age:0,sex:0.681818,trestbps:0,chol:0,fbs:0.140496,thalach:0,exang:0.338843,oldpeak:0,ca:0,cp_0:0.475207,cp_1:0.169421,cp_2:0.293388,cp_3:0.061983,restecg_0:0.471074,restecg_1:0.512397,restecg_2:0.016529,slope_0:0.070248,slope_1:0.446281,slope_2:0.483471,thal_0:0.004132,thal_1:0.057851,thal_2:0.533058,thal_3:0.404959};
-const LABELS={age:"Age",sex:"Sex",trestbps:"Resting Blood Pressure",chol:"Cholesterol",fbs:"Fasting Blood Sugar",thalach:"Max Heart Rate",exang:"Exercise-induced Angina",oldpeak:"ST Depression",ca:"Major Vessels",cp_0:"Chest Pain: Typical angina",cp_1:"Chest Pain: Atypical angina",cp_2:"Chest Pain: Non-anginal",cp_3:"Chest Pain: Asymptomatic",restecg_0:"Resting ECG: Normal",restecg_1:"Resting ECG: ST-T abnorm.",restecg_2:"Resting ECG: LV hypertrophy",slope_0:"ST Slope: Upsloping",slope_1:"ST Slope: Flat",slope_2:"ST Slope: Downsloping",thal_0:"Thalassemia: Unknown",thal_1:"Thalassemia: Fixed defect",thal_2:"Thalassemia: Normal",thal_3:"Thalassemia: Reversible"};
-const GLOBAL=[["cp_0",0.5839],["ca",0.4406],["sex",0.4261],["thal_3",0.4136],["chol",0.402],["thal_2",0.3775],["oldpeak",0.3761],["exang",0.3481]];
+/*AUTO:model*/const COLUMNS=["age", "sex", "trestbps", "chol", "fbs", "thalach", "exang", "oldpeak", "ca", "cp_0", "cp_1", "cp_2", "cp_3", "restecg_0", "restecg_1", "restecg_2", "slope_0", "slope_1", "slope_2", "thal_0", "thal_1", "thal_2", "thal_3"];
+const COEF=[0.064153,0.236022,0.069881,0.038218,0.014205,-0.271398,0.269300,0.328097,0.369892,0.347894,-0.096628,-0.178857,-0.072403,0.090601,-0.093867,0.003272,-0.013015,0.198238,-0.185218,0.014355,0.023560,-0.367944,0.330034];
+const INTERCEPT=-0.488247;
+const NUMERIC=["age", "trestbps", "chol", "thalach", "oldpeak", "ca"];
+const SMEAN={age:54.396694,trestbps:131.380165,chol:249.545455,thalach:149.842975,oldpeak:1.054132,ca:0.661157};
+const SSCALE={age:8.989415,trestbps:17.485652,chol:53.170084,thalach:22.027784,oldpeak:1.163602,ca:0.953928};
+const BASE={age:-0.000000,sex:0.669421,trestbps:-0.000000,chol:0.000000,fbs:0.157025,thalach:-0.000000,exang:0.342975,oldpeak:-0.000000,ca:-0.000000,cp_0:0.479339,cp_1:0.169421,cp_2:0.272727,cp_3:0.078512,restecg_0:0.479339,restecg_1:0.508264,restecg_2:0.012397,slope_0:0.066116,slope_1:0.471074,slope_2:0.462810,thal_0:0.004132,thal_1:0.053719,thal_2:0.545455,thal_3:0.396694};
+const LABELS={"age": "Age", "sex": "Sex", "trestbps": "Resting blood pressure", "chol": "Cholesterol", "fbs": "Fasting blood sugar > 120", "thalach": "Max heart rate", "exang": "Exercise-induced angina", "oldpeak": "ST depression", "ca": "Major vessels colored", "cp_0": "Chest pain type: asymptomatic", "cp_1": "Chest pain type: atypical angina", "cp_2": "Chest pain type: non-anginal pain", "cp_3": "Chest pain type: typical angina", "restecg_0": "Resting ECG: normal", "restecg_1": "Resting ECG: LV hypertrophy", "restecg_2": "Resting ECG: ST-T abnormality", "slope_0": "ST slope: downsloping", "slope_1": "ST slope: flat", "slope_2": "ST slope: upsloping", "thal_0": "Thalassemia: unknown", "thal_1": "Thalassemia: fixed defect", "thal_2": "Thalassemia: normal", "thal_3": "Thalassemia: reversible defect"};
+const GLOBAL=[["ca", 0.3051], ["oldpeak", 0.26], ["thalach", 0.2178], ["thal_2", 0.1825], ["cp_0", 0.1736], ["thal_3", 0.158], ["exang", 0.1214], ["sex", 0.1045]];
+/*/AUTO:model*/
+
+(async function checkApiOnLoad(){
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(()=>controller.abort(), 1500);
+    const res = await fetch("http://127.0.0.1:8000/health", {signal: controller.signal});
+    clearTimeout(t);
+    if(res.ok){
+      document.getElementById("apiStatus").innerHTML = '<span class="dot"></span>Live API connected · Logistic Regression';
+    }
+  } catch(e){
+    document.getElementById("apiStatus").innerHTML = '<span class="dot" style="background:var(--sub)"></span>API offline — local calculation';
+  }
+})();
 
 document.querySelectorAll(".nav-item").forEach(el=>el.addEventListener("click",()=>goTo(el.dataset.page)));
 function goTo(p){
@@ -358,16 +360,61 @@ function buildVector(){
   return vec;
 }
 
-function runPrediction(){
-  const vec=buildVector();
+const API_BASE = "http://127.0.0.1:8000";
+
+function rawPatient(){
+  return {
+    age:+document.getElementById("f_age").value, sex:+document.querySelector('input[name="f_sex"]:checked').value,
+    cp:+document.getElementById("f_cp").value, trestbps:+document.getElementById("f_trestbps").value,
+    chol:+document.getElementById("f_chol").value, thalach:+document.getElementById("f_thalach").value,
+    restecg:+document.getElementById("f_restecg").value, oldpeak:+document.getElementById("f_oldpeak").value,
+    slope:+document.getElementById("f_slope").value, ca:+document.getElementById("f_ca").value,
+    thal:+document.getElementById("f_thal").value,
+    fbs:document.getElementById("sw_fbs").classList.contains("on")?1:0,
+    exang:document.getElementById("sw_exang").classList.contains("on")?1:0,
+  };
+}
+
+async function callApi(patient){
+  const controller = new AbortController();
+  const timeout = setTimeout(()=>controller.abort(), 2000);
+  const res = await fetch(`${API_BASE}/explain`, {
+    method: "POST", headers: {"Content-Type":"application/json"},
+    body: JSON.stringify(patient), signal: controller.signal,
+  });
+  clearTimeout(timeout);
+  if(!res.ok) throw new Error("API error " + res.status);
+  const data = await res.json();
+  return {
+    proba: data.prediction.probability_disease,
+    pred: data.prediction.prediction,
+    contrib: Object.fromEntries(data.contributions.map(c => [c.feature, c.value])),
+    source: "api",
+  };
+}
+
+function computeLocally(patient){
+  const vec={age:patient.age,sex:patient.sex,trestbps:patient.trestbps,chol:patient.chol,fbs:patient.fbs,thalach:patient.thalach,exang:patient.exang,oldpeak:patient.oldpeak,ca:patient.ca};
+  ["cp_0","cp_1","cp_2","cp_3"].forEach(k=>vec[k]=0); vec["cp_"+patient.cp]=1;
+  ["restecg_0","restecg_1","restecg_2"].forEach(k=>vec[k]=0); vec["restecg_"+patient.restecg]=1;
+  ["slope_0","slope_1","slope_2"].forEach(k=>vec[k]=0); vec["slope_"+patient.slope]=1;
+  ["thal_0","thal_1","thal_2","thal_3"].forEach(k=>vec[k]=0); vec["thal_"+patient.thal]=1;
+  NUMERIC.forEach(c=>vec[c]=(vec[c]-SMEAN[c])/SSCALE[c]);
+
   let logit=INTERCEPT; const contrib={};
   COLUMNS.forEach((c,i)=>{ logit+=COEF[i]*vec[c]; contrib[c]=COEF[i]*(vec[c]-BASE[c]); });
   const proba=1/(1+Math.exp(-logit));
-  const pred=proba>=0.5?1:0;
+  return { proba, pred: proba>=0.5?1:0, contrib, source: "local" };
+}
 
+function renderResult({proba, pred, contrib, source}){
   const card=document.getElementById("predResultCard");
+  const sourceTag = source==="api"
+    ? `<span style="font-size:10.5px;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:99px;margin-left:8px">● Live API</span>`
+    : `<span style="font-size:10.5px;color:var(--sub);background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:99px;margin-left:8px">Calcul local (API hors ligne)</span>`;
+
   card.innerHTML=`<div class="card"><div class="result-banner ${pred?'risk':'safe'}">
-    <div><b>${pred?'Heart disease detected':'No heart disease detected'}</b>
+    <div><b>${pred?'Heart disease detected':'No heart disease detected'}</b>${sourceTag}
     <div style="font-size:12px;margin-top:4px;opacity:.85">Disease: ${(proba*100).toFixed(1)}% · No disease: ${((1-proba)*100).toFixed(1)}%</div></div>
     </div>
     <div class="bar-track" style="max-width:100%;margin-bottom:4px"><div class="bar-fill" style="width:${(proba*100).toFixed(1)}%;background:${pred?'var(--red)':'var(--green)'}"></div></div>
@@ -379,19 +426,36 @@ function runPrediction(){
   let rows=sorted.map(([k,v])=>{
     const pct=(Math.abs(v)/maxAbs*100).toFixed(0);
     const color=v>0?'var(--red)':'var(--green)';
-    const align=v>0?'flex-end':'flex-start';
-    return `<div class="bar-row"><span>${LABELS[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};margin-left:${v>0?0:'auto'}"></div></div><span style="color:${color};text-align:right">${v>0?'+':''}${v.toFixed(2)}</span></div>`;
+    const label = LABELS[k] || k;
+    return `<div class="bar-row"><span>${label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};margin-left:${v>0?0:'auto'}"></div></div><span style="color:${color};text-align:right">${v>0?'+':''}${v.toFixed(2)}</span></div>`;
   }).join("");
 
   const top=sorted[0], second=sorted[1];
   const dir=v=>v>0?"augmenté":"réduit";
+  const topLabel = LABELS[top[0]] || top[0];
+  const secondLabel = LABELS[second[0]] || second[0];
   document.getElementById("explainBody").innerHTML=`
-    <p style="font-size:12px;color:var(--sub);margin-bottom:14px"><span style="color:var(--red)">■</span> augmente le risque &nbsp; <span style="color:var(--green)">■</span> réduit le risque</p>
+    <p style="font-size:12px;color:var(--sub);margin-bottom:14px"><span style="color:var(--red)">■</span> augmente le risque &nbsp; <span style="color:var(--green)">■</span> réduit le risque ${sourceTag}</p>
     ${rows}
     <div class="warn" style="background:var(--accent-light);border-color:var(--border);color:var(--text);margin-top:16px">
-    <b>Explication :</b> ${LABELS[top[0]]} a le plus ${dir(top[1])} le risque (${top[1]>0?'+':''}${top[1].toFixed(2)}), suivi de ${LABELS[second[0]]} (${second[1]>0?'+':''}${second[1].toFixed(2)}). Score final : <b>${(proba*100).toFixed(1)}%</b> de probabilité de maladie cardiaque.</div>`;
+    <b>Explication :</b> ${topLabel} a le plus ${dir(top[1])} le risque (${top[1]>0?'+':''}${top[1].toFixed(2)}), suivi de ${secondLabel} (${second[1]>0?'+':''}${second[1].toFixed(2)}). Score final : <b>${(proba*100).toFixed(1)}%</b> de probabilité de maladie cardiaque.</div>`;
 
   goTo("explain");
+}
+
+async function runPrediction(){
+  const patient = rawPatient();
+  const btn = document.querySelector('[onclick="runPrediction()"]');
+  if(btn){ btn.disabled = true; btn.style.opacity = .6; }
+
+  try {
+    const result = await callApi(patient);
+    renderResult(result);
+  } catch (err) {
+    renderResult(computeLocally(patient));
+  } finally {
+    if(btn){ btn.disabled = false; btn.style.opacity = 1; }
+  }
 }
 
 const gmax=Math.max(...GLOBAL.map(e=>e[1]));

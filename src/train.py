@@ -1,90 +1,86 @@
 """
 train.py
 --------
-Entraîne et compare plusieurs modèles (Logistic Regression, Random Forest,
-XGBoost) sur le dataset Heart Disease, puis sauvegarde le meilleur modèle.
+Entraîne le modèle DÉPLOYÉ (utilisé par l'API et l'app Streamlit).
+
+  1. Le modèle à déployer est celui retenu par la validation croisée imbriquée
+     (models/cv_results.json, produit par `python src/evaluate.py`).
+  2. Ses hyperparamètres sont réglés par validation croisée stratifiée à 5 plis
+     sur le jeu d'entraînement uniquement.
+  3. Il est évalué une seule fois sur le jeu de test mis de côté (20 %).
+
+ATTENTION : avec seulement 61 patients de test, ces chiffres sont bruités
+(un seul patient change le recall de ~3 points). La référence pour comparer
+les modèles est models/cv_results.json, pas ce score.
+
+Lancer depuis la racine du projet :   python src/train.py
 """
 
 import json
+import os
+import sys
+
 import joblib
-import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    roc_auc_score,
-    confusion_matrix,
+from sklearn.model_selection import StratifiedKFold
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from evaluate import METRICS, compute_metrics  # noqa: E402
+from model_config import SEED, base_estimator, make_search  # noqa: E402
+from preprocessing import (  # noqa: E402
+    NUMERIC_COLS, build_preprocessed_dataset, load_data, split_and_scale, split_data,
 )
 
-from preprocessing import load_data, build_preprocessed_dataset, split_and_scale
-
-MODELS = {
-    "Logistic Regression": LogisticRegression(max_iter=1000, random_state=42),
-    "Random Forest": RandomForestClassifier(n_estimators=300, random_state=42),
-    "XGBoost": XGBClassifier(
-        n_estimators=300,
-        max_depth=4,
-        learning_rate=0.05,
-        eval_metric="logloss",
-        random_state=42,
-    ),
-}
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CV_RESULTS = os.path.join(ROOT, "models", "cv_results.json")
 
 
-def evaluate(model, X_test, y_test):
-    y_pred = model.predict(X_test)
-    y_proba = model.predict_proba(X_test)[:, 1]
-    return {
-        "accuracy": round(accuracy_score(y_test, y_pred), 4),
-        "precision": round(precision_score(y_test, y_pred), 4),
-        "recall": round(recall_score(y_test, y_pred), 4),
-        "f1": round(f1_score(y_test, y_pred), 4),
-        "roc_auc": round(roc_auc_score(y_test, y_proba), 4),
-        "confusion_matrix": confusion_matrix(y_test, y_pred).tolist(),
-    }
+def selected_model_name():
+    if os.path.exists(CV_RESULTS):
+        with open(CV_RESULTS, encoding="utf-8") as f:
+            return json.load(f)["selected_model"]
+    print("models/cv_results.json introuvable : lance d'abord `python src/evaluate.py`.\n"
+          "Par défaut : Logistic Regression.")
+    return "Logistic Regression"
 
 
 def main():
-    df = load_data()
+    df = load_data(os.path.join(ROOT, "data", "heart.csv"))
     X, y = build_preprocessed_dataset(df)
+    name = selected_model_name()
+    print(f"Modèle à déployer : {name}")
+
+    # Réglage des hyperparamètres sur le jeu d'entraînement (scaler dans chaque pli)
+    X_tr_raw, _, y_tr, _ = split_data(X, y)
+    cv = StratifiedKFold(5, shuffle=True, random_state=SEED)
+    search = make_search(name, list(X.columns), cv)
+    search.fit(X_tr_raw, y_tr)
+    params = {k.replace("clf__", ""): (v.item() if hasattr(v, "item") else v)
+              for k, v in search.best_params_.items()}
+    print(f"Hyperparamètres retenus (ROC-AUC CV = {search.best_score_:.3f}) : {params}")
+
+    # Entraînement final : le scaler est ajusté sur le train, comme attendu par l'API/app
     X_train, X_test, y_train, y_test, scaler = split_and_scale(X, y)
+    model = base_estimator(name).set_params(**params).fit(X_train, y_train)
 
-    results = {}
-    fitted_models = {}
+    metrics = compute_metrics(y_test, model.predict_proba(X_test)[:, 1])
+    print("\nScore sur le jeu de test (61 patients, bruité) :")
+    for m in METRICS:
+        print(f"  {m:<12} {metrics[m]:.3f}")
 
-    for name, model in MODELS.items():
-        model.fit(X_train, y_train)
-        metrics = evaluate(model, X_test, y_test)
-        results[name] = metrics
-        fitted_models[name] = model
-        print(f"\n{name}")
-        for k, v in metrics.items():
-            if k != "confusion_matrix":
-                print(f"  {k}: {v}")
+    if name != "Logistic Regression":
+        print("\nNote : le calcul local du dashboard HTML (web/index.html) suppose une "
+              "régression logistique ; en mode API il fonctionne avec n'importe quel modèle.")
 
-    # Sélection du meilleur modèle sur le F1-score
-    best_name = max(results, key=lambda n: results[n]["f1"])
-    best_model = fitted_models[best_name]
-    print(f"\n>>> Meilleur modèle : {best_name} (F1 = {results[best_name]['f1']})")
-
-    joblib.dump(
-        {
-            "model": best_model,
-            "scaler": scaler,
-            "columns": X_train.columns.tolist(),
-            "model_name": best_name,
-        },
-        "models/best_model.joblib",
-    )
-
-    with open("models/results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-    print("Modèle sauvegardé dans models/best_model.joblib")
+    os.makedirs(os.path.join(ROOT, "models"), exist_ok=True)
+    joblib.dump({"model": model, "scaler": scaler, "columns": X_train.columns.tolist(),
+                 "model_name": name, "hyperparameters": params},
+                os.path.join(ROOT, "models", "best_model.joblib"))
+    with open(os.path.join(ROOT, "models", "results.json"), "w", encoding="utf-8") as f:
+        json.dump({"model": name, "hyperparameters": params, "holdout_test_n": int(len(y_test)),
+                   "holdout_metrics": {m: round(float(metrics[m]), 4) for m in METRICS},
+                   "note": "Score sur 61 patients : indicatif. Référence : cv_results.json."},
+                  f, indent=2, ensure_ascii=False)
+    print("\nModèle sauvegardé dans models/best_model.joblib")
 
 
 if __name__ == "__main__":

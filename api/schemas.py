@@ -4,7 +4,7 @@ schemas.py
 Modèles Pydantic pour valider les requêtes/réponses de l'API.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PatientInput(BaseModel):
@@ -22,14 +22,15 @@ class PatientInput(BaseModel):
     ca: int = Field(..., ge=0, le=3, description="Nombre de vaisseaux majeurs colorés")
     thal: int = Field(..., ge=0, le=3, description="Thalassémie")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "age": 58, "sex": 1, "cp": 3, "trestbps": 130, "chol": 250,
                 "fbs": 0, "restecg": 0, "thalach": 148, "exang": 0,
                 "oldpeak": 1.4, "slope": 1, "ca": 0, "thal": 2,
             }
         }
+    )
 
 
 class PredictionOutput(BaseModel):
