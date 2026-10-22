@@ -19,7 +19,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from preprocessing import (
     NUMERIC_COLS, CATEGORICAL_COLS, CATEGORY_NAMES, load_data, build_preprocessed_dataset,
-    split_and_scale, readable_feature,
+    split_and_scale,
+)
+from shap_utils import (
+    CAVEAT, DISCLAIMER, aggregate_by_variable, base_probability, describe_patient, output_space,
+    sigmoid, value_label, variable_label,
 )
 
 st.set_page_config(page_title="HeartAI — Explainable Prediction", page_icon="🫀", layout="wide")
@@ -58,6 +62,18 @@ h1, .hero-title{font-family:'Fraunces',Georgia,serif !important; font-weight:800
   margin-bottom:9px; font-size:13px}
 .bar-track{height:15px; background:#f4f6f8; border-radius:5px; overflow:hidden}
 .bar-fill{height:100%; border-radius:5px}
+.wf-head,.wf-row{display:grid; grid-template-columns:210px 1fr 52px 58px; align-items:center; gap:10px}
+.wf-head{font-size:10.5px; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin:12px 0 6px; font-weight:600}
+.wf-head span:nth-child(n+3), .wf-x, .wf-p{text-align:right}
+.wf-row{margin-bottom:7px; font-size:12.5px}
+.wf-row.edge{font-weight:600; padding:5px 0; border-top:1px dashed #e5e9ee}
+.wf-row.edge.first{border-top:none; border-bottom:1px dashed #e5e9ee}
+.wf-track{position:relative; height:16px; background:#f4f6f8; border-radius:5px}
+.wf-bar{position:absolute; top:0; height:100%; border-radius:4px; min-width:3px}
+.wf-dot{position:absolute; top:-3px; width:4px; height:22px; background:#111827; border-radius:2px; transform:translateX(-2px)}
+.wf-p{color:#6b7280}
+.note{background:var(--accent-light); border:1px solid #e5e9ee; border-radius:10px; padding:12px 14px;
+  font-size:12.5px; line-height:1.55; margin-top:14px}
 .section-tag{font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.04em;
   font-weight:700; margin:14px 0 2px}
 </style>
@@ -117,10 +133,14 @@ thal = st.sidebar.selectbox("Thalassemia", [0, 1, 2, 3], index=2, format_func=la
 predict_btn = st.sidebar.button("Predict Heart Disease Risk →")
 
 
-def build_patient_row():
-    raw = {"age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol,
+def raw_patient():
+    return {"age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol,
            "fbs": fbs, "restecg": restecg, "thalach": thalach, "exang": exang,
            "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal}
+
+
+def build_patient_row():
+    raw = raw_patient()
     df_encoded = pd.get_dummies(pd.DataFrame([raw]), columns=CATEGORICAL_COLS)
     for col in columns:
         if col not in df_encoded.columns:
@@ -141,11 +161,11 @@ if predict_btn:
 
     with col1:
         banner_class = "risk" if pred == 1 else "safe"
-        label = "Heart disease detected" if pred == 1 else "No heart disease detected"
+        label = "Heart disease likely (model estimate)" if pred == 1 else "Heart disease unlikely (model estimate)"
         st.markdown(f"""
         <div class="result-banner {banner_class}">
           <b>{label}</b><br>
-          <span style="font-size:13px">Disease: {proba[1]*100:.1f}% · No disease: {proba[0]*100:.1f}%</span>
+          <span style="font-size:13px">Estimated probability: {proba[1]*100:.1f}% · complement: {proba[0]*100:.1f}%</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -166,31 +186,56 @@ if predict_btn:
             explainer = shap.LinearExplainer(
                 model, shap.maskers.Independent(background, max_samples=len(background))
             )
-
-        shap_values = explainer(patient_df)
-        if len(shap_values.shape) == 3:
-            values = shap_values.values[0, :, 1]
+        sv = explainer(patient_df)
+        if sv.values.ndim == 3:
+            values, base = sv.values[0, :, 1], float(sv.base_values[0, 1])
         else:
-            values = shap_values.values[0]
+            values, base = sv.values[0], float(sv.base_values[0])
 
-        contrib = list(zip(patient_df.columns, values))
-        contrib.sort(key=lambda t: -abs(t[1]))
-        contrib = contrib[:9]
-        max_abs = max(abs(v) for _, v in contrib) or 1
+        raw = raw_patient()
+        by_var = aggregate_by_variable(pd.DataFrame([values], columns=patient_df.columns)).iloc[0]
+        base_p = base_probability(model, base)
+        linear = output_space(model) == "log-odds"
+        order = by_var.sort_values(key=abs, ascending=False)
+        head, tail = order.iloc[:8], order.iloc[8:]
 
-        bars_html = '<p style="font-size:12px;color:#6b7280;margin-bottom:10px">' \
-                    '<span style="color:#e0546a">■</span> augmente le risque &nbsp; ' \
-                    '<span style="color:#0f9488">■</span> réduit le risque</p>'
-        for feat, val in contrib:
-            pct = abs(val) / max_abs * 100
-            color = "#e0546a" if val > 0 else "#0f9488"
-            label_name = readable_feature(feat)
-            bars_html += f"""<div class="bar-row"><span>{label_name}</span>
-              <div class="bar-track"><div class="bar-fill" style="width:{pct:.0f}%;background:{color}"></div></div>
-              <span style="color:{color};text-align:right">{'+' if val>0 else ''}{val:.2f}</span></div>"""
-        st.markdown(bars_html, unsafe_allow_html=True)
+        steps = [(f"{variable_label(v)}: {value_label(v, raw[v])}", float(x)) for v, x in head.items()]
+        if len(tail):
+            steps.append((f"{len(tail)} autres variables", float(tail.sum())))
+        cum, rows = base, []
+        for lab, x in steps:
+            rows.append((lab, x, cum, cum + x))
+            cum += x
+        pts = [base, cum] + [r[2] for r in rows] + [r[3] for r in rows]
+        lo, hi = min(pts), max(pts)
+        pad = (hi - lo) * 0.06 or 0.1
+        lo, hi = lo - pad, hi + pad
+        pos = lambda v: (v - lo) / (hi - lo) * 100
+        prob = lambda v: f"{sigmoid(v) * 100:.0f} %" if linear else "—"
 
-    st.caption("⚠️ Présenté comme un exercice académique de prédiction / explicabilité, "
-               "pas comme un outil médical de diagnostic.")
+        html = ('<p style="font-size:12px;color:#6b7280;margin-bottom:4px"><span style="color:#e0546a">■</span> '
+                'pousse vers « maladie » &nbsp; <span style="color:#0f9488">■</span> pousse vers « sain »</p>'
+                '<div class="wf-head"><span>Variable : valeur du patient</span><span></span><span>Effet</span>'
+                '<span>Prob. cumulée</span></div>')
+        html += (f'<div class="wf-row edge first"><span>Patient moyen (valeur de base)</span><div class="wf-track">'
+                 f'<div class="wf-dot" style="left:{pos(base):.2f}%"></div></div><span></span>'
+                 f'<span class="wf-p"><b>{base_p * 100:.0f} %</b></span></div>')
+        for lab, x, a_, b_ in rows:
+            color = "#e0546a" if x > 0 else "#0f9488"
+            html += (f'<div class="wf-row"><span>{lab}</span><div class="wf-track"><div class="wf-bar" '
+                     f'style="left:{pos(min(a_, b_)):.2f}%;width:{abs(b_ - a_) / (hi - lo) * 100:.2f}%;background:{color}"></div></div>'
+                     f'<span class="wf-x" style="color:{color}">{x:+.2f}</span><span class="wf-p">{prob(b_)}</span></div>')
+        html += (f'<div class="wf-row edge"><span>Prédiction du modèle</span><div class="wf-track">'
+                 f'<div class="wf-dot" style="left:{pos(cum):.2f}%"></div></div><span></span>'
+                 f'<span class="wf-p"><b>{proba[1] * 100:.0f} %</b></span></div>')
+        html += ('<div class="note"><b>Comment lire ce graphique.</b> On part du patient moyen (en haut). Chaque barre '
+                 'déplace la probabilité estimée : rouge vers « maladie », vert vers « sain », et la colonne de droite '
+                 'donne la probabilité après cette étape. Les effets s\'additionnent exactement jusqu\'à la prédiction du '
+                 'modèle (en bas). Les longueurs sont en log-odds, pas en points de pourcentage.</div>')
+        st.markdown(html, unsafe_allow_html=True)
+
+    st.markdown("#### En clair")
+    st.markdown(describe_patient(raw, by_var, float(proba[1]), base_p))
+    st.warning(f"**{CAVEAT}** {DISCLAIMER}")
 else:
     st.info("Renseigne les caractéristiques du patient dans le panneau de gauche, puis clique sur **Predict**.")

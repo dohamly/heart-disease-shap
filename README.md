@@ -1,6 +1,6 @@
 # Heart Disease Prediction + Explainable AI (SHAP)
 
-![CI](https://github.com/dohamly/heart-disease-shap/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/dohamly/heart-disease-shap-/actions/workflows/ci.yml/badge.svg)
 
 Prédiction du risque de maladie cardiaque à partir de 13 variables cliniques, avec **explication de chaque prédiction par SHAP**, une évaluation par **validation croisée imbriquée** et une **analyse des erreurs**.
 
@@ -118,7 +118,7 @@ Profil moyen de chaque groupe (prédictions out-of-fold, modèle retenu) :
 
 ![SHAP : ce qui pousse le modèle à se tromper](reports/shap_errors.png)
 
-Le graphique montre la contribution SHAP moyenne de chaque variable chez les erreurs (rouge : vers « malade », vert : vers « sain »). Chez les faux négatifs, la ST depression, les vaisseaux colorés, l'angine d'effort et la fréquence cardiaque max poussent vers « sain ». Chez les faux positifs, la thalassémie non normale, le sexe masculin et la fréquence cardiaque basse poussent vers « malade ».
+**Comment lire ce graphique.** Chaque barre est la contribution SHAP moyenne d'une variable chez les patients mal classés (rouge : vers « malade », vert : vers « sain »). Elle dit ce qui a poussé le modèle à se tromper, pas pourquoi le patient est réellement malade ou sain. Chez les faux négatifs, la ST depression, les vaisseaux colorés, l'angine d'effort et la fréquence cardiaque max poussent vers « sain ». Chez les faux positifs, la thalassémie non normale, le sexe masculin et la fréquence cardiaque basse poussent vers « malade ».
 
 Explications individuelles du faux négatif et du faux positif les plus tranchés :
 
@@ -128,17 +128,60 @@ Explications individuelles du faux négatif et du faux positif les plus tranché
 
 La liste complète des 51 patients mal classés, avec leurs 3 facteurs SHAP principaux, est dans `reports/misclassified_patients.csv`. Le détail chiffré (écarts standardisés, 5 erreurs les plus confiantes de chaque type) est dans `reports/error_analysis.md`.
 
-## Explicabilité avec SHAP
+## SHAP : comprendre pourquoi le modèle prédit ce qu'il prédit
 
-Importance globale des variables sur le modèle final :
+> **SHAP explique le comportement du modèle, pas une relation causale médicale.** Une variable qui « augmente la probabilité estimée » n'est pas pour autant une cause de la maladie. **Projet académique : ce n'est pas un outil de diagnostic médical.**
 
-![SHAP summary plot](models/shap_summary_plot.png)
+SHAP répartit l'écart entre la prédiction faite pour un patient et celle d'un « patient moyen » du jeu d'entraînement entre les variables. Les contributions sont **additives** : valeur de base + somme des contributions = sortie du modèle (testé à 10⁻⁹ près dans `tests/test_shap_utils.py` ; écart observé : environ 10⁻¹⁵). Pour la régression logistique, la contribution d'une variable vaut exactement `coefficient × (valeur − moyenne d'entraînement)`. Les colonnes encodées d'une même variable (par exemple `cp_0` à `cp_3`) sont additionnées, ce qui donne **une contribution par variable clinique** (13) au lieu de 23 colonnes.
 
-Explication d'une prédiction individuelle :
+### Vue globale : ce que le modèle utilise
 
-![SHAP waterfall plot](models/shap_waterfall_plot.png)
+![Beeswarm SHAP](models/shap_summary_plot.png)
 
-Pour la régression logistique, la valeur SHAP d'une variable vaut exactement `coefficient × (valeur − moyenne d'entraînement)`.
+**Comment lire ce graphique.** Chaque point est un patient. Sa position horizontale est la contribution de la variable à sa prédiction : à droite, elle pousse vers « malade », à gauche vers « sain ». La couleur indique la valeur de la variable (rouge : élevée ou présente, bleu : basse ou absente). Exemple : pour « Major vessels colored », les points rouges (3 vaisseaux colorés) sont tout à droite, donc plus il y a de vaisseaux colorés, plus le modèle augmente la probabilité estimée.
+
+![Importance des variables](models/shap_bar_plot.png)
+
+**Comment lire ce graphique.** La longueur d'une barre est la contribution SHAP absolue moyenne de la variable (toutes colonnes encodées additionnées) ; le pourcentage est sa part du total. Une barre longue signifie que le modèle s'appuie beaucoup sur cette variable, **dans un sens ou dans l'autre**.
+
+| Variable | Part | Comment le modèle l'utilise |
+|---|---|---|
+| Thalassemia | 16 % | « reversible defect » augmente la probabilité (+0.20 en moyenne), « normal » la réduit (−0.17) |
+| Major vessels colored | 16 % | contribution moyenne −0.26 pour les valeurs basses, +0.41 pour les hautes |
+| ST depression | 13 % | −0.30 pour les valeurs basses, +0.43 pour les hautes |
+| Chest pain type | 12 % | « asymptomatic » augmente (+0.18), « non-anginal pain » réduit (−0.13) |
+| Max heart rate | 11 % | +0.39 pour les valeurs basses, −0.32 pour les hautes : une fréquence max élevée réduit la probabilité |
+| ST slope | 9 % | « flat » augmente (+0.10), « upsloping » réduit (−0.10) |
+
+Ces six variables représentent 77 % de l'importance totale. Les directions sont cohérentes avec les associations cliniques habituelles : c'est un contrôle de bon sens (avant la correction de `target`, elles étaient à l'envers), pas une preuve de causalité.
+
+### Vue individuelle : expliquer un patient
+
+Deux patients du jeu de test (jamais vus à l'entraînement par le modèle déployé) :
+
+| Patient à risque élevé (n° 191) | Patient à faible risque (n° 162) |
+|---|---|
+| ![Waterfall risque élevé](models/shap_waterfall_plot.png) | ![Waterfall faible risque](models/shap_waterfall_low_risk.png) |
+
+**Comment lire ces graphiques.** On part en bas de la valeur de base (le patient moyen : −0.21 en log-odds, soit 45 %). Chaque barre ajoute la contribution d'une variable, avec la valeur du patient à gauche : rouge vers « malade », bleu vers « sain ». En haut, `f(x)` est la sortie du modèle pour ce patient (2.43 en log-odds, soit 92 %, pour le premier). La longueur d'une barre est en log-odds, pas en points de pourcentage.
+
+**Interprétation du patient n° 191 (probabilité estimée 92 %).** Ce qui pèse le plus : 3 vaisseaux colorés (+0.91), thalassémie à défaut réversible (+0.40), dépression ST de 2.2 (+0.32) et douleur thoracique asymptomatique (+0.25). Aucune variable ne tire notablement vers « sain ».
+
+**Interprétation du patient n° 162 (probabilité estimée 10 %).** Ce qui pèse le plus vers « sain » : fréquence cardiaque max de 182 bpm (−0.40), thalassémie normale (−0.30), dépression ST nulle (−0.30) et aucun vaisseau coloré (−0.26). Seul le sexe masculin tire légèrement vers « malade » (+0.08).
+
+Ces textes sont générés automatiquement à partir des valeurs SHAP (`src/shap_utils.py::describe_patient`) ; le dashboard (version JavaScript de la même règle) et l'app Streamlit produisent un texte du même type pour n'importe quel patient saisi, à partir des mêmes contributions (l'équivalence des chiffres entre le dashboard et l'API est testée). Le rapport complet est dans `reports/shap_interpretation.md`.
+
+### SHAP sur les erreurs
+
+L'analyse des faux positifs et des faux négatifs avec SHAP est dans la section « Analyse des erreurs » ci-dessus (`reports/shap_errors.png` et les deux waterfalls individuels).
+
+### Les trois modèles expliquent-ils de la même façon ?
+
+![Comparaison SHAP des modèles](reports/shap_model_comparison.png)
+
+**Comment lire ce graphique.** Pour chaque modèle (hyperparamètres réglés sur le jeu d'entraînement), la barre donne la part de l'importance SHAP totale portée par une variable. On compare des parts relatives, car les valeurs SHAP de la forêt aléatoire sont en probabilité et celles des deux autres modèles en log-odds.
+
+Les trois modèles se rejoignent sur l'essentiel : la corrélation de rang de Spearman entre leurs importances est de 0,91 (régression logistique / forêt), 0,83 (régression logistique / XGBoost) et 0,92 (forêt / XGBoost), et trois variables sont dans le top 5 de chacun (vaisseaux colorés, type de douleur thoracique, thalassémie). Ils diffèrent sur les proportions : la thalassémie pèse 16 % pour la régression logistique contre 26 % et 25 % pour les deux modèles à arbres, tandis que la fréquence cardiaque max pèse 11 % contre 7 % et 3 %. Comme les trois modèles ont des performances statistiquement équivalentes, cet accord renforce la confiance dans l'explication, sans l'établir comme une vérité médicale.
 
 ## Trois interfaces pour le même modèle
 
@@ -148,7 +191,9 @@ Pour la régression logistique, la valeur SHAP d'une variable vaut exactement `c
 | `app.py` | Prototype Streamlit tout-en-un | `streamlit run app.py` |
 | `api/main.py` | Backend FastAPI (`/predict`, `/explain`, `/health`), doc Swagger auto-générée | `uvicorn api.main:app --reload` puis `http://127.0.0.1:8000/docs` |
 
-Les calculs locaux du dashboard et de l'API ont été comparés sur 60 patients : écart maximal 5·10⁻⁵ sur les probabilités et sur les contributions SHAP.
+Le dashboard et l'app Streamlit affichent, pour n'importe quel patient saisi, la prédiction, les deux probabilités, un graphique SHAP dynamique (cascade du patient moyen à la prédiction, avec la probabilité cumulée), un texte d'interprétation, et le rappel que SHAP n'est pas causal et que l'outil n'est pas un diagnostic. L'endpoint `/explain` de l'API renvoie les contributions SHAP, la valeur de base, son unité et la même note.
+
+Les calculs locaux du dashboard et de l'API ont été comparés sur 60 patients : écart maximal 5·10⁻⁵ sur les probabilités et sur les contributions SHAP. Un test automatique (`tests/test_dashboard_sync.py`) garde cette équivalence : si le modèle est réentraîné sans relancer `python src/export_dashboard.py`, la CI échoue au lieu de laisser le dashboard afficher des chiffres périmés.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/predict \
@@ -168,12 +213,13 @@ heart-disease-shap/
 │   ├── encoding_ablation.py # teste les choix d'encodage (ca, nominales, valeurs aberrantes)
 │   ├── evaluate.py          # validation croisée imbriquée, métriques, analyse des erreurs
 │   ├── train.py             # modèle final (tuning par CV) -> models/best_model.joblib
-│   ├── explain.py           # graphiques SHAP du modèle final
+│   ├── shap_utils.py        # outils SHAP partagés : agrégation par variable, texte d'interprétation
+│   ├── explain.py           # SHAP global et individuel, textes, comparaison des modèles
 │   └── export_dashboard.py  # synchronise web/index.html avec le modèle et les résultats
 ├── api/                     # FastAPI : main.py, schemas.py
 ├── web/index.html           # dashboard
 ├── app.py                   # Streamlit
-├── tests/                   # 21 tests : preprocessing, anti-fuite, métriques, sélection, API
+├── tests/                   # 29 tests : preprocessing, anti-fuite, métriques, sélection, SHAP, API, synchro dashboard
 ├── models/                  # best_model.joblib, results.json, graphiques SHAP
 ├── reports/                 # résultats de CV, figures, patients mal classés
 └── .github/workflows/ci.yml # tests à chaque push
@@ -186,9 +232,9 @@ pip install -r requirements.txt
 python src/evaluate.py     # ≈ 100 s : CV imbriquée, choix du modèle, analyse des erreurs
 python src/encoding_ablation.py   # ablation des choix d'encodage
 python src/train.py        # modèle final -> models/best_model.joblib
-python src/explain.py      # graphiques SHAP
+python src/explain.py      # SHAP : graphiques, interprétation, comparaison des modèles (~1 min)
 python src/export_dashboard.py   # met à jour web/index.html
-pytest tests/ -v           # 21 tests
+pytest tests/ -v           # 29 tests
 ```
 
 ## Limites
@@ -198,6 +244,8 @@ pytest tests/ -v           # 21 tests
 - Le modèle est choisi (règle de l'erreur standard) avec les mêmes plis externes que ceux qui rapportent sa performance : un léger optimisme est possible. L'effet est faible puisque les trois modèles sont indiscernables, mais une estimation sans biais demanderait un jeu de test jamais utilisé pour choisir.
 - Rappel de ≈ 78 % au seuil 0,5. Pour un usage de dépistage il faudrait régler le seuil, calibrer les probabilités et valider sur d'autres cohortes.
 - Étiquette `target` du CSV inversée (corrigée, voir plus haut) et quelques valeurs hors documentation.
+- Les noms des catégories de `cp`, `slope` et `restecg` sont déduits : le dictionnaire de données qui circule avec ce CSV est inversé pour `cp` et `slope`, et la correspondance de `restecg` est la moins sûre. Les explications SHAP sont cohérentes avec la clinique, ce qui conforte ce choix sans le prouver.
+- SHAP décrit un modèle, pas la maladie : les explications dépendent du modèle (voir la comparaison ci-dessus) et ne disent rien de la causalité. Les variables corrélées entre elles (par exemple dépression ST et pente ST, corrélées à −0,58) se partagent le crédit de façon arbitraire.
 
 ## Pistes d'amélioration
 

@@ -48,5 +48,8 @@ class FeatureContribution(BaseModel):
 
 class ExplanationOutput(BaseModel):
     prediction: PredictionOutput
-    contributions: list[FeatureContribution]
+    contributions: list[FeatureContribution]          # une par colonne encodée (one-hot)
+    variable_contributions: list[FeatureContribution]  # une par variable clinique (somme des colonnes encodées)
     base_value: float
+    base_probability: float                            # probabilité prédite pour le « patient moyen »
+    output_space: str                                  # "log-odds" ou "probability" : unité de base_value et des contributions

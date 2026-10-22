@@ -19,6 +19,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from shap_utils import aggregate_by_variable, base_probability, output_space  # noqa: E402
 from preprocessing import (  # noqa: E402
     NUMERIC_COLS,
     CATEGORICAL_COLS,
@@ -109,7 +110,7 @@ def run_prediction(patient: PatientInput) -> PredictionOutput:
 
     return PredictionOutput(
         prediction=pred,
-        prediction_label="Heart disease detected" if pred == 1 else "No heart disease detected",
+        prediction_label="Heart disease likely (model estimate)" if pred == 1 else "Heart disease unlikely (model estimate)",
         probability_disease=round(float(proba[1]), 4),
         probability_no_disease=round(float(proba[0]), 4),
         model_name=model_name,
@@ -162,5 +163,17 @@ def explain(patient: PatientInput):
         FeatureContribution(feature=f, value=round(float(v), 4))
         for f, v in sorted(zip(row.columns, values), key=lambda t: -abs(t[1]))
     ]
+    by_variable = aggregate_by_variable(pd.DataFrame([values], columns=row.columns)).iloc[0]
+    variable_contributions = [
+        FeatureContribution(feature=v, value=round(float(x), 4))
+        for v, x in by_variable.sort_values(key=abs, ascending=False).items()
+    ]
 
-    return ExplanationOutput(prediction=prediction, contributions=contributions, base_value=round(base, 4))
+    return ExplanationOutput(
+        prediction=prediction,
+        contributions=contributions,
+        variable_contributions=variable_contributions,
+        base_value=round(base, 4),
+        base_probability=round(base_probability(model, base), 4),
+        output_space=output_space(model),
+    )

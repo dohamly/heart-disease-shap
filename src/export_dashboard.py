@@ -19,12 +19,14 @@ import sys
 
 import joblib
 import numpy as np
+import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from preprocessing import (  # noqa: E402
-    CATEGORY_NAMES, NUMERIC_COLS, build_preprocessed_dataset, load_data,
+    CATEGORICAL_COLS, CATEGORY_NAMES, NUMERIC_COLS, build_preprocessed_dataset, load_data,
     readable_feature, split_and_scale,
 )
+from shap_utils import aggregate_by_variable, variable_label  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HTML = os.path.join(ROOT, "web", "index.html")
@@ -108,8 +110,14 @@ def js_constants(bundle, X, X_train):
     numeric = [c for c in NUMERIC_COLS if c in cols]
     coef = model.coef_[0]
     base = X_train.mean()
-    contrib = np.abs((X_train.values - base.values) * coef).mean(axis=0)
-    top = sorted(zip(cols, contrib), key=lambda t: -t[1])[:8]
+    # importance globale : |contribution SHAP| moyenne par VARIABLE clinique (colonnes one-hot
+    # additionnées), sur les 303 patients. Exact pour un modèle linéaire : coef * (x - moyenne train).
+    Xs = X.copy()
+    Xs[numeric] = scaler.transform(X[numeric])
+    Xs = Xs[cols]
+    shap_cols = pd.DataFrame((Xs.values - base.values) * coef, columns=cols, index=Xs.index)
+    imp = aggregate_by_variable(shap_cols).abs().mean().sort_values(ascending=False)
+    top = list(imp.items())
     f = lambda v: f"{float(v):.6f}"
     obj = lambda d: "{" + ",".join(f"{k}:{f(v)}" for k, v in d.items()) + "}"
     labels = {c: readable_feature(c) for c in cols}
@@ -122,6 +130,8 @@ def js_constants(bundle, X, X_train):
         "const SSCALE=" + obj(dict(zip(numeric, scaler.scale_))) + ";",
         "const BASE=" + obj({c: base[c] for c in cols}) + ";",
         "const LABELS=" + json.dumps(labels, ensure_ascii=False) + ";",
+        "const CATEGORICAL=" + json.dumps(CATEGORICAL_COLS) + ";",
+        "const VARLABELS=" + json.dumps({v: variable_label(v) for v, _ in top}, ensure_ascii=False) + ";",
         "const GLOBAL=" + json.dumps([[c, round(float(v), 4)] for c, v in top]) + ";",
     ]) + "\n"
 
@@ -199,8 +209,9 @@ def perf_html(res, name):
       </div>
       <div class="card">
         <h3>Feature Importance (SHAP Global)</h3>
-        <p class="desc">Mean absolute SHAP value across the training set (higher = more influence on the predicted risk)</p>
+        <p class="desc">Mean absolute SHAP contribution of each clinical variable over the 303 patients (one-hot columns are summed per variable). Percentages are each variable's share of the total.</p>
         <div id="globalBars"></div>
+        <p class="desc" style="margin-top:12px"><b>How to read it:</b> a longer bar means the model relies more on that variable to move its predicted probability, in either direction. <b>This describes the model's behaviour, not a medical cause-and-effect relationship</b>, and the project is not a diagnostic tool.</p>
       </div>
       <div class="card">
         <h3>Model Comparison</h3>

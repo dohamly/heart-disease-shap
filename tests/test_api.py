@@ -62,3 +62,16 @@ def test_explain_sign_convention():
     with_angina = {**PATIENT, "exang": 1}
     contribs = {c["feature"]: c["value"] for c in client.post("/explain", json=with_angina).json()["contributions"]}
     assert contribs["exang"] > 0
+
+
+def test_explain_exposes_variable_contributions_and_output_space():
+    r = client.post("/explain", json=PATIENT)
+    data = r.json()
+    assert data["output_space"] in ("log-odds", "probability")
+    variables = {c["feature"] for c in data["variable_contributions"]}
+    assert len(variables) == 13 and {"cp", "thal", "ca", "oldpeak"} <= variables
+    # additivité : la somme par variable = la somme par colonne encodée
+    total_cols = sum(c["value"] for c in data["contributions"])
+    total_vars = sum(c["value"] for c in data["variable_contributions"])
+    assert abs(total_cols - total_vars) < 1e-3
+    assert 0 < data["base_probability"] < 1

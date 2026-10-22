@@ -111,6 +111,21 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
 .sidebar-footer b{display:block;font-size:12.5px}
 .sidebar-footer span{display:block;font-size:11px;color:var(--sub)}
 @media(max-width:820px){.grid4,.grid5,.steps,.formgrid,.grid2{grid-template-columns:1fr 1fr}.sidebar{display:none}}
+
+.wf-head,.wf-row{display:grid;grid-template-columns:240px 1fr 56px 62px;align-items:center;gap:10px}
+.wf-head{font-size:10.5px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px;font-weight:600}
+.wf-head span:nth-child(3),.wf-head span:nth-child(4),.wf-x,.wf-p{text-align:right}
+.wf-row{margin-bottom:7px;font-size:12.5px}
+.wf-row.edge{font-weight:600;padding:5px 0;border-top:1px dashed var(--border)}
+.wf-row.edge.first{border-top:none;border-bottom:1px dashed var(--border)}
+.wf-track{position:relative;height:16px;background:var(--bg);border-radius:5px}
+.wf-bar{position:absolute;top:0;height:100%;border-radius:4px;min-width:3px}
+.wf-dot{position:absolute;top:-3px;width:4px;height:22px;background:var(--text);border-radius:2px;transform:translateX(-2px)}
+.wf-p{color:var(--sub)}
+.note{background:var(--accent-light);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.55;margin-top:14px}
+.note b{color:var(--text)}
+.note ul{margin:6px 0 0 18px;padding:0}
+@media(max-width:820px){.wf-head,.wf-row{grid-template-columns:120px 1fr 44px 44px}}
 </style>
 </head>
 <body>
@@ -226,8 +241,17 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
     <div class="page" id="explain">
       <div class="card">
         <h3>Why did the model make this prediction?</h3>
-        <p class="desc">SHAP (SHapley Additive exPlanations) values — contribution exacte de chaque variable, calculée à partir des coefficients réels du modèle.</p>
+        <p class="desc">Valeurs SHAP : contribution de chaque variable à la prédiction de ce patient, calculée à partir des coefficients réels du modèle (somme exacte : valeur de base + contributions = sortie du modèle).</p>
         <div id="explainBody"><p style="color:var(--sub);font-size:13px">Lance une prédiction dans l'onglet <b>Prediction</b> pour voir l'explication ici.</p></div>
+      </div>
+      <div class="card">
+        <h3>Lire une explication SHAP</h3>
+        <ul class="desc" style="margin:6px 0 0 18px;padding:0;line-height:1.6">
+          <li>On part du <b>patient moyen</b> du jeu d'entraînement, puis chaque variable déplace la probabilité estimée vers le haut (rouge, « maladie ») ou vers le bas (vert, « sain »).</li>
+          <li>Les valeurs sont des <b>log-odds</b> : plus elles sont grandes en valeur absolue, plus l'effet est fort. La colonne de droite traduit le cumul en probabilité.</li>
+          <li>Une variable catégorielle (ex. type de douleur thoracique) est résumée en <b>une seule barre</b> : on additionne les contributions de ses colonnes encodées.</li>
+        </ul>
+        <div class="warn" style="margin-top:14px"><b>SHAP explique le comportement du modèle, pas une relation causale médicale.</b> Une variable qui augmente la probabilité estimée n'est pas pour autant une cause de la maladie. <b>Projet académique : ce n'est pas un outil de diagnostic médical</b> et il ne doit pas servir à une décision clinique.</div>
       </div>
     </div>
 
@@ -261,8 +285,9 @@ th{color:var(--sub);font-weight:600;font-size:11px;text-transform:uppercase}
       </div>
       <div class="card">
         <h3>Feature Importance (SHAP Global)</h3>
-        <p class="desc">Mean absolute SHAP value across the training set (higher = more influence on the predicted risk)</p>
+        <p class="desc">Mean absolute SHAP contribution of each clinical variable over the 303 patients (one-hot columns are summed per variable). Percentages are each variable's share of the total.</p>
         <div id="globalBars"></div>
+        <p class="desc" style="margin-top:12px"><b>How to read it:</b> a longer bar means the model relies more on that variable to move its predicted probability, in either direction. <b>This describes the model's behaviour, not a medical cause-and-effect relationship</b>, and the project is not a diagnostic tool.</p>
       </div>
       <div class="card">
         <h3>Model Comparison</h3>
@@ -315,7 +340,9 @@ const SMEAN={age:54.396694,trestbps:131.380165,chol:249.545455,thalach:149.84297
 const SSCALE={age:8.989415,trestbps:17.485652,chol:53.170084,thalach:22.027784,oldpeak:1.163602,ca:0.953928};
 const BASE={age:-0.000000,sex:0.669421,trestbps:-0.000000,chol:0.000000,fbs:0.157025,thalach:-0.000000,exang:0.342975,oldpeak:-0.000000,ca:-0.000000,cp_0:0.479339,cp_1:0.169421,cp_2:0.272727,cp_3:0.078512,restecg_0:0.479339,restecg_1:0.508264,restecg_2:0.012397,slope_0:0.066116,slope_1:0.471074,slope_2:0.462810,thal_0:0.004132,thal_1:0.053719,thal_2:0.545455,thal_3:0.396694};
 const LABELS={"age": "Age", "sex": "Sex", "trestbps": "Resting blood pressure", "chol": "Cholesterol", "fbs": "Fasting blood sugar > 120", "thalach": "Max heart rate", "exang": "Exercise-induced angina", "oldpeak": "ST depression", "ca": "Major vessels colored", "cp_0": "Chest pain type: asymptomatic", "cp_1": "Chest pain type: atypical angina", "cp_2": "Chest pain type: non-anginal pain", "cp_3": "Chest pain type: typical angina", "restecg_0": "Resting ECG: normal", "restecg_1": "Resting ECG: LV hypertrophy", "restecg_2": "Resting ECG: ST-T abnormality", "slope_0": "ST slope: downsloping", "slope_1": "ST slope: flat", "slope_2": "ST slope: upsloping", "thal_0": "Thalassemia: unknown", "thal_1": "Thalassemia: fixed defect", "thal_2": "Thalassemia: normal", "thal_3": "Thalassemia: reversible defect"};
-const GLOBAL=[["ca", 0.3051], ["oldpeak", 0.26], ["thalach", 0.2178], ["thal_2", 0.1825], ["cp_0", 0.1736], ["thal_3", 0.158], ["exang", 0.1214], ["sex", 0.1045]];
+const CATEGORICAL=["cp", "restecg", "slope", "thal"];
+const VARLABELS={"thal": "Thalassemia", "ca": "Major vessels colored", "oldpeak": "ST depression", "cp": "Chest pain type", "thalach": "Max heart rate", "slope": "ST slope", "exang": "Exercise-induced angina", "sex": "Sex", "restecg": "Resting ECG", "trestbps": "Resting blood pressure", "age": "Age", "chol": "Cholesterol", "fbs": "Fasting blood sugar > 120"};
+const GLOBAL=[["thal", 0.324], ["ca", 0.3226], ["oldpeak", 0.2629], ["cp", 0.2424], ["thalach", 0.2274], ["slope", 0.1798], ["exang", 0.12], ["sex", 0.1034], ["restecg", 0.0911], ["trestbps", 0.0539], ["age", 0.0532], ["chol", 0.0285], ["fbs", 0.0037]];
 /*/AUTO:model*/
 
 (async function checkApiOnLoad(){
@@ -389,6 +416,7 @@ async function callApi(patient){
     proba: data.prediction.probability_disease,
     pred: data.prediction.prediction,
     contrib: Object.fromEntries(data.contributions.map(c => [c.feature, c.value])),
+    base: data.base_value, baseProba: data.base_probability, space: data.output_space,
     source: "api",
   };
 }
@@ -404,41 +432,91 @@ function computeLocally(patient){
   let logit=INTERCEPT; const contrib={};
   COLUMNS.forEach((c,i)=>{ logit+=COEF[i]*vec[c]; contrib[c]=COEF[i]*(vec[c]-BASE[c]); });
   const proba=1/(1+Math.exp(-logit));
-  return { proba, pred: proba>=0.5?1:0, contrib, source: "local" };
+  let base=INTERCEPT; COLUMNS.forEach((c,i)=>{ base+=COEF[i]*BASE[c]; });   // sortie du modèle pour le patient moyen
+  return { proba, pred: proba>=0.5?1:0, contrib, base, baseProba: 1/(1+Math.exp(-base)), space: "log-odds", source: "local" };
 }
 
-function renderResult({proba, pred, contrib, source}){
-  const card=document.getElementById("predResultCard");
+const UNITS={age:" years",trestbps:" mmHg",chol:" mg/dl",thalach:" bpm"};
+const SIGMOID=x=>1/(1+Math.exp(-x));
+const SHOWN_IN_CHART=8, MIN_EFFECT=0.05, TOP_IN_TEXT=4;
+
+function varOf(col){ const m=col.match(/^(.*)_(\d+)$/); return (m && CATEGORICAL.includes(m[1])) ? m[1] : col; }
+function aggregateByVariable(contrib){
+  const out={}; for(const [c,v] of Object.entries(contrib)){ const k=varOf(c); out[k]=(out[k]||0)+v; } return out;
+}
+function valueLabel(v,p){
+  if(CATEGORICAL.includes(v)){ const el=document.getElementById("f_"+v); return el?el.options[el.selectedIndex].text.toLowerCase():String(p[v]); }
+  if(v==="sex") return p.sex?"male":"female";
+  if(v==="fbs"||v==="exang") return p[v]?"yes":"no";
+  if(v==="oldpeak") return Number(p.oldpeak).toFixed(1);
+  return p[v]+(UNITS[v]||"");
+}
+const sg=x=>(x>0?"+":"")+x.toFixed(2);
+
+function describePatient(p, byVar, proba, baseProba, linear){
+  const items=Object.entries(byVar);
+  const up=items.filter(([,x])=>x>=MIN_EFFECT).sort((a,b)=>b[1]-a[1]).slice(0,TOP_IN_TEXT);
+  const down=items.filter(([,x])=>x<=-MIN_EFFECT).sort((a,b)=>a[1]-b[1]).slice(0,TOP_IN_TEXT);
+  const shown=new Set([...up,...down].map(e=>e[0]));
+  const rest=items.filter(([k])=>!shown.has(k));
+  const other=rest.reduce((s,[,x])=>s+x,0);
+  const fmt=l=>l.length?l.map(([k,x])=>`${VARLABELS[k]} (${valueLabel(k,p)}) <b>${sg(x)}</b>`).join(" ; "):"aucun facteur notable";
+  return `<b>En clair.</b> Le modèle estime une probabilité de maladie de <b>${(proba*100).toFixed(0)} %</b> (patient moyen du jeu d'entraînement : ${(baseProba*100).toFixed(0)} %).
+    <ul>
+      <li><b>Ce qui augmente le plus cette probabilité</b> : ${fmt(up)}</li>
+      <li><b>Ce qui la réduit le plus</b> : ${fmt(down)}</li>
+      <li>Les autres variables (détail dans le graphique) pèsent ensemble ${sg(other)}.</li>
+    </ul>`;
+}
+
+function renderResult({proba, pred, contrib, base, baseProba, space, source}){
+  const patient=rawPatient();
+  const linear = space==="log-odds";
   const sourceTag = source==="api"
     ? `<span style="font-size:10.5px;color:var(--accent);background:var(--accent-light);padding:2px 8px;border-radius:99px;margin-left:8px">● Live API</span>`
     : `<span style="font-size:10.5px;color:var(--sub);background:var(--bg);border:1px solid var(--border);padding:2px 8px;border-radius:99px;margin-left:8px">Calcul local (API hors ligne)</span>`;
 
-  card.innerHTML=`<div class="card"><div class="result-banner ${pred?'risk':'safe'}">
-    <div><b>${pred?'Heart disease detected':'No heart disease detected'}</b>${sourceTag}
-    <div style="font-size:12px;margin-top:4px;opacity:.85">Disease: ${(proba*100).toFixed(1)}% · No disease: ${((1-proba)*100).toFixed(1)}%</div></div>
+  document.getElementById("predResultCard").innerHTML=`<div class="card"><div class="result-banner ${pred?'risk':'safe'}">
+    <div><b>${pred?'Heart disease likely (model estimate)':'Heart disease unlikely (model estimate)'}</b>${sourceTag}
+    <div style="font-size:12px;margin-top:4px;opacity:.85">Estimated probability: ${(proba*100).toFixed(1)}% · complement: ${((1-proba)*100).toFixed(1)}%</div></div>
     </div>
     <div class="bar-track" style="max-width:100%;margin-bottom:4px"><div class="bar-fill" style="width:${(proba*100).toFixed(1)}%;background:${pred?'var(--red)':'var(--green)'}"></div></div>
-    <p class="desc" style="margin-top:14px">Va dans l'onglet <b>Explainability</b> pour voir le détail des contributions SHAP de ce patient.</p>
+    <p class="desc" style="margin-top:14px">Estimation d'un modèle académique, <b>pas un diagnostic médical</b>. Va dans l'onglet <b>Explainability</b> pour voir ce qui pèse dans cette estimation.</p>
     </div>`;
 
-  const sorted=Object.entries(contrib).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,9);
-  const maxAbs=Math.max(...sorted.map(e=>Math.abs(e[1])));
-  let rows=sorted.map(([k,v])=>{
-    const pct=(Math.abs(v)/maxAbs*100).toFixed(0);
-    const color=v>0?'var(--red)':'var(--green)';
-    const label = LABELS[k] || k;
-    return `<div class="bar-row"><span>${label}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color};margin-left:${v>0?0:'auto'}"></div></div><span style="color:${color};text-align:right">${v>0?'+':''}${v.toFixed(2)}</span></div>`;
+  // --- cascade SHAP par variable clinique (colonnes one-hot additionnées)
+  const byVar=aggregateByVariable(contrib);
+  const sorted=Object.entries(byVar).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+  const head=sorted.slice(0,SHOWN_IN_CHART), tail=sorted.slice(SHOWN_IN_CHART);
+  const tailSum=tail.reduce((s,[,x])=>s+x,0);
+  const steps=head.map(([k,x])=>({label:`${VARLABELS[k]}: ${valueLabel(k,patient)}`, x}));
+  if(tail.length) steps.push({label:`${tail.length} autres variables`, x:tailSum});
+
+  let cum=base; const rows=steps.map(s=>{ const r={...s, from:cum, to:cum+s.x}; cum=r.to; return r; });
+  const pts=[base, ...rows.flatMap(r=>[r.from,r.to]), cum];
+  let lo=Math.min(...pts), hi=Math.max(...pts); const pad=(hi-lo)*0.06||0.1; lo-=pad; hi+=pad;
+  const pos=v=>((v-lo)/(hi-lo)*100).toFixed(2);
+  const prob=v=>linear?`${(SIGMOID(v)*100).toFixed(0)} %`:"—";
+
+  const edge=(label,v,pTxt,first)=>`<div class="wf-row edge ${first?'first':''}"><span>${label}</span>
+    <div class="wf-track"><div class="wf-dot" style="left:${pos(v)}%"></div></div><span></span><span class="wf-p"><b>${pTxt}</b></span></div>`;
+  const body=rows.map(r=>{
+    const color=r.x>0?'var(--red)':'var(--green)';
+    const l=Math.min(r.from,r.to), w=Math.abs(r.to-r.from);
+    return `<div class="wf-row"><span>${r.label}</span>
+      <div class="wf-track"><div class="wf-bar" style="left:${pos(l)}%;width:${(w/(hi-lo)*100).toFixed(2)}%;background:${color}"></div></div>
+      <span class="wf-x" style="color:${color}">${sg(r.x)}</span><span class="wf-p">${prob(r.to)}</span></div>`;
   }).join("");
 
-  const top=sorted[0], second=sorted[1];
-  const dir=v=>v>0?"augmenté":"réduit";
-  const topLabel = LABELS[top[0]] || top[0];
-  const secondLabel = LABELS[second[0]] || second[0];
   document.getElementById("explainBody").innerHTML=`
-    <p style="font-size:12px;color:var(--sub);margin-bottom:14px"><span style="color:var(--red)">■</span> augmente le risque &nbsp; <span style="color:var(--green)">■</span> réduit le risque ${sourceTag}</p>
-    ${rows}
-    <div class="warn" style="background:var(--accent-light);border-color:var(--border);color:var(--text);margin-top:16px">
-    <b>Explication :</b> ${topLabel} a le plus ${dir(top[1])} le risque (${top[1]>0?'+':''}${top[1].toFixed(2)}), suivi de ${secondLabel} (${second[1]>0?'+':''}${second[1].toFixed(2)}). Score final : <b>${(proba*100).toFixed(1)}%</b> de probabilité de maladie cardiaque.</div>`;
+    <p style="font-size:12px;color:var(--sub);margin-bottom:4px"><span style="color:var(--red)">■</span> pousse vers « maladie » &nbsp; <span style="color:var(--green)">■</span> pousse vers « sain » ${sourceTag}</p>
+    <div class="wf-head"><span>Variable : valeur du patient</span><span></span><span>Effet</span><span>Probabilité cumulée</span></div>
+    ${edge("Patient moyen (valeur de base)", base, linear?`${(baseProba*100).toFixed(0)} %`:"—", true)}
+    ${body}
+    ${edge("Prédiction du modèle", cum, `${(proba*100).toFixed(0)} %`, false)}
+    <div class="note"><b>Comment lire ce graphique.</b> On part du patient moyen (en haut). Chaque barre déplace la probabilité estimée : rouge vers « maladie », vert vers « sain », et la colonne de droite donne la probabilité après cette étape. Les effets s'additionnent exactement jusqu'à la prédiction du modèle (en bas). La longueur d'une barre est exprimée en log-odds, pas en points de pourcentage.</div>
+    <div class="note">${describePatient(patient, byVar, proba, baseProba, linear)}</div>
+    <div class="warn" style="margin-top:14px"><b>SHAP explique le comportement du modèle, pas une relation causale médicale.</b> Une variable qui augmente la probabilité estimée n'est pas pour autant une cause de la maladie. <b>Projet académique : ce n'est pas un outil de diagnostic médical.</b></div>`;
 
   goTo("explain");
 }
@@ -458,9 +536,9 @@ async function runPrediction(){
   }
 }
 
-const gmax=Math.max(...GLOBAL.map(e=>e[1]));
+const gmax=Math.max(...GLOBAL.map(e=>e[1])), gtot=GLOBAL.reduce((s,e)=>s+e[1],0);
 document.getElementById("globalBars").innerHTML=GLOBAL.map(([k,v])=>
-  `<div class="bar-row"><span>${LABELS[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${(v/gmax*100).toFixed(0)}%;background:var(--accent)"></div></div><span>${v.toFixed(2)}</span></div>`
+  `<div class="bar-row"><span>${VARLABELS[k]}</span><div class="bar-track"><div class="bar-fill" style="width:${(v/gmax*100).toFixed(0)}%;background:var(--accent)"></div></div><span>${(v/gtot*100).toFixed(0)} %</span></div>`
 ).join("");
 </script>
 </body>
