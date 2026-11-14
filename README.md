@@ -1,13 +1,12 @@
 # Heart Disease Prediction + Explainable AI (SHAP)
 
-![CI](https://github.com/dohamly/heart-disease-shap-/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/dohamly/heart-disease-shap/actions/workflows/ci.yml/badge.svg)
 
 Prédiction du risque de maladie cardiaque à partir de 13 variables cliniques, avec **explication de chaque prédiction par SHAP**, une évaluation par **validation croisée imbriquée** et une **analyse des erreurs**.
 
 > **Avertissement** : application à visée éducative et de recherche. Ce n'est pas un outil de diagnostic médical et elle ne doit pas servir à une décision clinique.
 
-**Démo en ligne** : _lien Streamlit Cloud à ajouter après le déploiement (voir « Déployer l'application Streamlit »)._
-
+**Démo en ligne** : https://heart-disease-shap-6ctyrzc9qelaelndpwbgkv.streamlit.app
 ## Résultats en bref
 
 | | Régression logistique (modèle retenu) |
