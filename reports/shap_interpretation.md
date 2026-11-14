@@ -1,7 +1,7 @@
 # Interprétation SHAP
 
 > SHAP décrit comment le modèle utilise les variables pour prédire ; il n'établit aucune relation de cause à effet médicale. Une variable qui « augmente le risque » dans le modèle n'est pas pour autant une cause de la maladie.
-> Projet académique : ce n'est pas un outil de diagnostic médical et il ne doit pas servir à une décision clinique.
+> Application à visée éducative et de recherche : ce n'est pas un outil de diagnostic médical et elle ne doit pas servir à une décision clinique.
 
 Modèle expliqué : **Logistic Regression** (le modèle déployé). SHAP calculé sur les 303 patients, avec le jeu d'entraînement comme référence. Unité : log-odds. Pour un patient moyen, le modèle prédit un risque de 45 %.
 

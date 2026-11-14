@@ -1,26 +1,26 @@
 """
 schemas.py
 ----------
-Modèles Pydantic pour valider les requêtes/réponses de l'API.
+Pydantic models validating the requests and responses of the API.
 """
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class PatientInput(BaseModel):
-    age: int = Field(..., ge=1, le=120, description="Age en années")
-    sex: int = Field(..., ge=0, le=1, description="0 = Femme, 1 = Homme")
-    cp: int = Field(..., ge=0, le=3, description="Type de douleur thoracique (0-3)")
-    trestbps: float = Field(..., ge=60, le=250, description="Tension artérielle au repos")
-    chol: float = Field(..., ge=80, le=700, description="Cholestérol sérique (mg/dl)")
-    fbs: int = Field(..., ge=0, le=1, description="Glycémie à jeun > 120 mg/dl")
-    restecg: int = Field(..., ge=0, le=2, description="Résultats ECG au repos")
-    thalach: float = Field(..., ge=50, le=250, description="Fréquence cardiaque maximale")
-    exang: int = Field(..., ge=0, le=1, description="Angine induite par l'effort")
-    oldpeak: float = Field(..., ge=0, le=10, description="Dépression du segment ST")
-    slope: int = Field(..., ge=0, le=2, description="Pente du segment ST")
-    ca: int = Field(..., ge=0, le=3, description="Nombre de vaisseaux majeurs colorés")
-    thal: int = Field(..., ge=0, le=3, description="Thalassémie")
+    age: int = Field(..., ge=1, le=120, description="Age in years")
+    sex: int = Field(..., ge=0, le=1, description="0 = female, 1 = male")
+    cp: int = Field(..., ge=0, le=3, description="Chest pain type (0-3)")
+    trestbps: float = Field(..., ge=60, le=250, description="Resting blood pressure (mm Hg)")
+    chol: float = Field(..., ge=80, le=700, description="Serum cholesterol (mg/dl)")
+    fbs: int = Field(..., ge=0, le=1, description="Fasting blood sugar > 120 mg/dl (0/1)")
+    restecg: int = Field(..., ge=0, le=2, description="Resting ECG result (0-2)")
+    thalach: float = Field(..., ge=50, le=250, description="Maximum heart rate achieved")
+    exang: int = Field(..., ge=0, le=1, description="Exercise-induced angina (0/1)")
+    oldpeak: float = Field(..., ge=0, le=10, description="ST depression induced by exercise")
+    slope: int = Field(..., ge=0, le=2, description="Slope of the peak exercise ST segment (0-2)")
+    ca: int = Field(..., ge=0, le=3, description="Number of major vessels coloured by fluoroscopy (0-3)")
+    thal: int = Field(..., ge=0, le=3, description="Thalassemia (0-3)")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -48,8 +48,8 @@ class FeatureContribution(BaseModel):
 
 class ExplanationOutput(BaseModel):
     prediction: PredictionOutput
-    contributions: list[FeatureContribution]          # une par colonne encodée (one-hot)
-    variable_contributions: list[FeatureContribution]  # une par variable clinique (somme des colonnes encodées)
+    contributions: list[FeatureContribution]          # one per encoded column (one-hot)
+    variable_contributions: list[FeatureContribution]  # one per clinical variable (sum of its encoded columns)
     base_value: float
-    base_probability: float                            # probabilité prédite pour le « patient moyen »
-    output_space: str                                  # "log-odds" ou "probability" : unité de base_value et des contributions
+    base_probability: float                            # predicted probability of the average patient
+    output_space: str                                  # "log-odds" or "probability": unit of base_value and of the contributions

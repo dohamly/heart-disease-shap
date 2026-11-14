@@ -1,33 +1,26 @@
 """
 main.py
 -------
-API FastAPI qui sert le modèle Heart Disease + SHAP.
+FastAPI service exposing the Heart Disease + SHAP model.
 
-Lancer en local :
+Run locally:
     uvicorn api.main:app --reload
 
-Documentation interactive auto-générée : http://127.0.0.1:8000/docs
+Interactive documentation (Swagger UI): http://127.0.0.1:8000/docs
 """
 
 import os
 import sys
 
-import joblib
 import pandas as pd
-import shap
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from shap_utils import aggregate_by_variable, base_probability, output_space  # noqa: E402
-from preprocessing import (  # noqa: E402
-    NUMERIC_COLS,
-    CATEGORICAL_COLS,
-    load_data,
-    build_preprocessed_dataset,
-    split_and_scale,
+from inference import (  # noqa: E402
+    MODEL_PATH, encode_patients, load_bundle, make_explainer, training_background, unpack_explanation,
 )
-
+from shap_utils import aggregate_by_variable, base_probability, output_space  # noqa: E402
 from api.schemas import (  # noqa: E402
     PatientInput,
     PredictionOutput,
@@ -35,17 +28,26 @@ from api.schemas import (  # noqa: E402
     FeatureContribution,
 )
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "best_model.joblib")
+DESCRIPTION = """
+REST API serving the **Heart Disease + SHAP** model (logistic regression, UCI Cleveland).
 
-app = FastAPI(
-    title="Heart Disease Prediction API",
-    description=(
-        "API académique de démonstration — prédiction du risque de maladie "
-        "cardiaque avec explicabilité SHAP. Ne constitue pas un outil de "
-        "diagnostic médical."
-    ),
-    version="1.0.0",
-)
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | is the service running and the model available? |
+| `POST /predict` | predicted class and probabilities for one patient |
+| `POST /explain` | prediction + SHAP explanation (contribution of each variable) |
+
+**Disclaimer.** For educational and research purposes only: this is not a medical diagnostic tool.
+SHAP explains the behaviour of the model, not a medical cause-and-effect relationship.
+"""
+
+TAGS = [
+    {"name": "Health", "description": "Check that the service and the model are available."},
+    {"name": "Prediction", "description": "Predict the class and the probability of disease for one patient."},
+    {"name": "Explainability", "description": "Explain a prediction with SHAP (additive values, per variable)."},
+]
+
+app = FastAPI(title="Heart Disease Prediction API", description=DESCRIPTION, version="1.0.0", openapi_tags=TAGS)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,52 +57,46 @@ app.add_middleware(
 )
 
 _bundle = None
-_background = None  # échantillon du train set, utilisé comme référence SHAP
+_background = None  # scaled training split, used as the SHAP reference population
+_explainer = None
 
 
 def get_bundle():
-    """Charge le modèle une seule fois (lazy load, mis en cache)."""
+    """Load the deployed model once (lazy, then cached)."""
     global _bundle
     if _bundle is None:
         if not os.path.exists(MODEL_PATH):
             raise HTTPException(
                 status_code=503,
-                detail="Modèle introuvable. Lance d'abord `python src/train.py`.",
+                detail="Model not found. Run `python src/train.py` first.",
             )
-        _bundle = joblib.load(MODEL_PATH)
+        _bundle = load_bundle(MODEL_PATH)
     return _bundle
 
 
 def get_background():
-    """Reconstruit le X_train (même split que l'entraînement) pour servir
-    de référence SHAP — sans ça, LinearExplainer prend le patient lui-même
-    comme baseline et toutes les contributions tombent à 0."""
+    """Return the SHAP reference population (cached)."""
     global _background
     if _background is None:
-        df = load_data()
-        X, y = build_preprocessed_dataset(df)
-        X_train, X_test, y_train, y_test, scaler = split_and_scale(X, y)
-        _background = X_train
+        _background = training_background()
     return _background
 
 
+def get_explainer():
+    """Return the SHAP explainer of the deployed model, built once instead of once per request."""
+    global _explainer
+    if _explainer is None:
+        _explainer = make_explainer(get_bundle()["model"], get_background())
+    return _explainer
+
+
 def build_feature_row(patient: PatientInput) -> pd.DataFrame:
-    bundle = get_bundle()
-    columns, scaler = bundle["columns"], bundle["scaler"]
-
-    raw = pd.DataFrame([patient.model_dump()])
-    encoded = pd.get_dummies(raw, columns=CATEGORICAL_COLS)
-    for col in columns:
-        if col not in encoded.columns:
-            encoded[col] = 0
-    encoded = encoded[columns].astype("float64")
-
-    numeric_present = [c for c in NUMERIC_COLS if c in encoded.columns]
-    encoded[numeric_present] = scaler.transform(encoded[numeric_present])
-    return encoded
+    """Encode one validated patient exactly like the training data (one-hot, column order, scaling)."""
+    return encode_patients(patient.model_dump(), get_bundle())
 
 
 def run_prediction(patient: PatientInput) -> PredictionOutput:
+    """Predict the class and both probabilities for one validated patient."""
     bundle = get_bundle()
     model, model_name = bundle["model"], bundle["model_name"]
 
@@ -117,47 +113,48 @@ def run_prediction(patient: PatientInput) -> PredictionOutput:
     )
 
 
-@app.get("/", tags=["Health"])
+@app.get("/", tags=["Health"], summary="API home page")
 def root():
+    """Return a minimal status message, handy to check that the server answers."""
     return {"status": "ok", "service": "Heart Disease Prediction API"}
 
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Health"], summary="Service and model status")
 def health():
+    """Return `model_available: true` when the trained model file is present."""
     bundle_loaded = os.path.exists(MODEL_PATH)
     return {"model_available": bundle_loaded}
 
 
-@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"])
+@app.post("/predict", response_model=PredictionOutput, tags=["Prediction"], summary="Predict for one patient")
 def predict(patient: PatientInput):
-    """Prédit le risque de maladie cardiaque pour un patient donné."""
+    """
+    Predict the **class** (1 = disease likely, 0 = unlikely, decision threshold 0.5) and both
+    **probabilities** (disease / no disease) for one patient.
+
+    Fields are validated: an out-of-range value (for example `sex = 7`) returns a 422 error.
+    """
     return run_prediction(patient)
 
 
-@app.post("/explain", response_model=ExplanationOutput, tags=["Explainability"])
+@app.post("/explain", response_model=ExplanationOutput, tags=["Explainability"], summary="Predict and explain with SHAP")
 def explain(patient: PatientInput):
-    """Prédiction + décomposition SHAP (contribution de chaque variable)."""
+    """
+    Prediction + SHAP explanation. `contributions` gives the effect of each encoded column and
+    `variable_contributions` the effect per clinical variable (one-hot columns are summed).
+
+    **Additivity**: `base_value` + sum of the contributions = model output (in the unit given by
+    `output_space`). SHAP describes the behaviour of the model, not a medical cause-and-effect
+    relationship.
+    """
     bundle = get_bundle()
     model = bundle["model"]
 
     row = build_feature_row(patient)
     prediction = run_prediction(patient)
 
-    if type(model).__name__ in ("RandomForestClassifier", "XGBClassifier"):
-        explainer = shap.TreeExplainer(model)
-    else:
-        bg = get_background()
-        explainer = shap.LinearExplainer(
-            model, shap.maskers.Independent(bg, max_samples=len(bg))
-        )
-
-    shap_values = explainer(row)
-    if len(shap_values.shape) == 3:
-        values = shap_values.values[0, :, 1]
-        base = float(shap_values.base_values[0, 1])
-    else:
-        values = shap_values.values[0]
-        base = float(shap_values.base_values[0])
+    all_values, base = unpack_explanation(get_explainer()(row))
+    values = all_values[0]
 
     contributions = [
         FeatureContribution(feature=f, value=round(float(v), 4))

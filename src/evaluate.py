@@ -35,6 +35,7 @@ from sklearn.metrics import (  # noqa: E402
 from sklearn.model_selection import StratifiedKFold  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from inference import explain_rows  # noqa: E402
 from model_config import MODEL_NAMES, SEED, make_search  # noqa: E402
 from preprocessing import (  # noqa: E402
     CATEGORY_NAMES, build_preprocessed_dataset, load_data, readable_feature,
@@ -140,7 +141,8 @@ def plot_curves(results, y):
     a1.set(xlabel="Taux de faux positifs", ylabel="Taux de vrais positifs (recall)", title="Courbes ROC")
     a2.axhline(y.mean(), ls="--", color="gray")
     a2.set(xlabel="Recall", ylabel="Precision", title="Courbes Precision-Recall")
-    a1.legend(loc="lower right"); a2.legend(loc="lower left")
+    a1.legend(loc="lower right")
+    a2.legend(loc="lower left")
     fig.tight_layout()
     fig.savefig(os.path.join(REPORTS, "roc_pr_curves_cv.png"), dpi=150)
     plt.close(fig)
@@ -169,18 +171,7 @@ def oof_shap(name, result, X):
     for tr, te, pipe in result["fitted"]:
         prep, clf = pipe.named_steps["prep"], pipe.named_steps["clf"]
         Xtr, Xte = prep.transform(X.iloc[tr]), prep.transform(X.iloc[te])
-        if name == "Logistic Regression":
-            expl = shap.LinearExplainer(clf, shap.maskers.Independent(Xtr, max_samples=len(Xtr)))
-            sv = expl.shap_values(Xte)
-        else:
-            expl = shap.TreeExplainer(clf)
-            sv = expl.shap_values(Xte)
-        if isinstance(sv, list):
-            sv = sv[1]
-        elif np.ndim(sv) == 3:
-            sv = sv[:, :, 1]
-        ev = np.atleast_1d(expl.expected_value)
-        base = float(ev[-1])
+        sv, base = explain_rows(clf, Xtr, Xte)
         parts.append(pd.DataFrame(sv, index=X.index[te], columns=Xte.columns))
         for i in X.index[te]:
             bases[i] = base
@@ -290,7 +281,8 @@ def error_analysis(name, result, X, y, df_raw):
         "Chaque patient est prédit par un modèle qui ne l'a pas vu à l'entraînement. Classe positive = maladie présente.", "",
         "## Comptage", "",
         f"- Vrais positifs : **{counts['TP']}** · Vrais négatifs : **{counts['TN']}**",
-        f"- Faux positifs (sain prédit malade) : **{counts['FP']}** · Faux négatifs (malade prédit sain) : **{counts['FN']}**", "",
+        f"- Faux positifs (sain prédit malade) : **{counts['FP']}** · "
+        f"Faux négatifs (malade prédit sain) : **{counts['FN']}**", "",
         "En santé, un faux négatif (malade non détecté) est en général plus grave qu'un faux positif : "
         "il faudrait donc abaisser le seuil de décision au-dessus de 0.5 si l'on privilégiait le recall.", "",
         "## Profil moyen de chaque groupe", "", md_table(prof, "{:.1f}"), "",

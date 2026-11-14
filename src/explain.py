@@ -19,21 +19,21 @@ Produit (depuis la racine du projet : `python src/explain.py`) :
 import os
 import sys
 
-import joblib
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import shap
-from scipy.stats import spearmanr
 from sklearn.model_selection import StratifiedKFold
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from inference import explain_rows, load_bundle, scale_encoded  # noqa: E402
 from model_config import MODEL_NAMES, SEED, make_search  # noqa: E402
 from preprocessing import (  # noqa: E402
-    BINARY_COLS, CATEGORICAL_COLS, NUMERIC_COLS, build_preprocessed_dataset, load_data,
+    BINARY_COLS, CATEGORICAL_COLS, build_preprocessed_dataset, load_data,
     readable_feature, split_data,
 )
+from shap_plots import save_waterfall  # noqa: E402
 from shap_utils import (  # noqa: E402
     BINARY_LABELS, CAVEAT, DISCLAIMER, aggregate_by_variable, base_probability, describe_patient,
     output_space, value_label, variable_label, variable_of,
@@ -43,27 +43,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS = os.path.join(ROOT, "models")
 REPORTS = os.path.join(ROOT, "reports")
 RED, GREEN = "#e0546a", "#0f9488"
-
-
-def load_artifacts(path=None):
-    bundle = joblib.load(path or os.path.join(MODELS, "best_model.joblib"))
-    return bundle["model"], bundle["scaler"], bundle["columns"], bundle["model_name"]
-
-
-def get_explainer(model, background):
-    """TreeExplainer pour les arbres, LinearExplainer (référence = jeu d'entraînement) sinon."""
-    if type(model).__name__ in ("RandomForestClassifier", "XGBClassifier"):
-        return shap.TreeExplainer(model)
-    return shap.LinearExplainer(model, shap.maskers.Independent(background, max_samples=len(background)))
-
-
-def shap_values(model, background, X):
-    """(valeurs n x p, valeur de base) pour la classe « maladie »."""
-    sv = get_explainer(model, background)(X)
-    if sv.values.ndim == 3:                       # arbres : une sortie par classe
-        return sv.values[:, :, 1], float(sv.base_values[0, 1])
-    return sv.values, float(sv.base_values[0])
-
 
 
 # ------------------------------------------------------------------ figures
@@ -92,18 +71,6 @@ def plot_importance(agg, path):
     plt.tight_layout()
     plt.savefig(path, dpi=150)
     plt.close(fig)
-
-
-def plot_waterfall(contrib, base, raw, title, path, p, base_p, max_display=9):
-    names = [f"{variable_label(v)}: {value_label(v, raw[v])}" for v in contrib.index]
-    ex = shap.Explanation(values=contrib.values, base_values=base, data=None, feature_names=names)
-    plt.figure()
-    shap.plots.waterfall(ex, max_display=max_display, show=False)
-    plt.title(f"{title}\nProbabilité estimée {p * 100:.0f} %  (patient moyen : {base_p * 100:.0f} %)",
-              fontsize=10, loc="left")
-    plt.tight_layout()
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close()
 
 
 # ------------------------------------------------- interprétation du global
@@ -140,7 +107,7 @@ def compare_models(X, y):
         best = make_search(name, list(X.columns), cv).fit(X_tr, y_tr).best_estimator_
         prep, clf = best.named_steps["prep"], best.named_steps["clf"]
         Xt, Xbg = prep.transform(X), prep.transform(X_tr)
-        vals, _ = shap_values(clf, Xbg, Xt)
+        vals, _ = explain_rows(clf, Xbg, Xt)
         agg = aggregate_by_variable(pd.DataFrame(vals, columns=Xt.columns, index=Xt.index))
         imp = agg.abs().mean()
         shares[name] = imp / imp.sum()        # parts relatives : comparables malgré des unités différentes
@@ -168,17 +135,16 @@ def main():
     os.makedirs(REPORTS, exist_ok=True)
     df = load_data(os.path.join(ROOT, "data", "heart.csv"))
     X, y = build_preprocessed_dataset(df)
-    model, scaler, cols, model_name = load_artifacts()
+    bundle = load_bundle()
+    model, cols, model_name = bundle["model"], bundle["columns"], bundle["model_name"]
     print(f"Explication du modèle déployé : {model_name}")
 
     # entrée du modèle : standardisation apprise sur le train (celle du modèle déployé)
     X_tr_raw, X_te_raw, y_tr, y_te = split_data(X, y)
-    Xs = X.copy()
-    Xs[NUMERIC_COLS] = scaler.transform(X[NUMERIC_COLS])
-    Xs = Xs[cols]
+    Xs = scale_encoded(X, bundle)
     background = Xs.loc[X_tr_raw.index]
 
-    vals, base = shap_values(model, background, Xs)
+    vals, base = explain_rows(model, background, Xs)
     shap_df = pd.DataFrame(vals, columns=cols, index=Xs.index)
     agg = aggregate_by_variable(shap_df)
     space = output_space(model)
@@ -199,8 +165,8 @@ def main():
         ("low", lo, "Patient à faible risque (sain, jeu de test)", "shap_waterfall_low_risk.png"),
     ]:
         raw = df.loc[idx]
-        plot_waterfall(agg.loc[idx].sort_values(key=np.abs, ascending=False), base, raw, title,
-                       os.path.join(MODELS, fname), float(proba[idx]), base_p)
+        save_waterfall(os.path.join(MODELS, fname), agg.loc[idx], base, raw, title,
+                       float(proba[idx]), base_p)
         patients[key] = (idx, raw, float(proba[idx]), describe_patient(
             raw, agg.loc[idx], float(proba[idx]), base_p))
 
@@ -239,7 +205,8 @@ def main():
     pairs = [("Logistic Regression", "Random Forest"), ("Logistic Regression", "XGBoost"), ("Random Forest", "XGBoost")]
     lines += ["", "Corrélation de rang de Spearman entre les importances : " +
               " ; ".join(f"{a} / {b} : {rho.loc[a, b]:.2f}" for a, b in pairs) + ".",
-              f"Variables communes aux 5 premières de chaque modèle : {', '.join(variable_label(v) for v in sorted(common)) or 'aucune'}.", "",
+              "Variables communes aux 5 premières de chaque modèle : "
+              f"{', '.join(variable_label(v) for v in sorted(common)) or 'aucune'}.", "",
               "Les trois modèles étant statistiquement équivalents en performance, un accord sur les variables "
               "utilisées renforce la confiance dans l'explication ; un désaccord signalerait qu'elle dépend du "
               "modèle choisi. Les valeurs SHAP des forêts sont en probabilité et celles des deux autres en "

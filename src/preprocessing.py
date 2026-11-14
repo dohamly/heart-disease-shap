@@ -1,51 +1,44 @@
 """
 preprocessing.py
------------------
-Chargement et préparation des données pour le projet Heart Disease + SHAP.
+----------------
+Data loading and preparation for the Heart Disease + SHAP project.
 
-TRAITEMENT DE CHAQUE VARIABLE
------------------------------
-  Numériques continues  age, trestbps, chol, thalach, oldpeak
-      -> standardisées (moyenne 0, écart-type 1). Obligatoire pour que le
-         coefficient d'une régression logistique régularisée (L2) soit
-         comparable d'une variable à l'autre (mmHg, mg/dl, bpm n'ont pas la
-         même échelle).
-  Numérique ordinale    ca  (nombre de vaisseaux colorés : 0, 1, 2, 3)
-      -> gardée numérique et standardisée. C'est un COMPTAGE ordonné : une
-         colonne au lieu de cinq, et un seul coefficient lisible
-         ("par vaisseau en plus"). Tester le one-hot ne change rien de
-         mesurable (reports/encoding_ablation.md, variante B).
-  Catégorielles nominales  cp, restecg, slope, thal
-      -> one-hot, SANS standardisation. Les codes 0/1/2/3 sont des
-         étiquettes, pas des quantités : "thal = 3" n'est pas "trois fois"
-         "thal = 1". Les traiter comme des nombres est légèrement pire
-         (variante D de l'ablation).
-  Binaires              sex, fbs, exang
-      -> laissées en 0/1, non standardisées (déjà interprétables).
+How each variable is handled
+----------------------------
+  Continuous numeric   age, trestbps, chol, thalach, oldpeak
+      Standardised (mean 0, std 1). Needed so the coefficients of a regularised (L2) logistic
+      regression are comparable across variables (mmHg, mg/dl and bpm have different scales).
+  Ordinal numeric      ca (number of coloured vessels: 0, 1, 2, 3)
+      Kept numeric and standardised. It is an ordered COUNT: one column instead of five and
+      one readable coefficient ("per extra vessel"). One-hot encoding it changes nothing
+      measurable (reports/encoding_ablation.md, variant B).
+  Nominal categorical  cp, restecg, slope, thal
+      One-hot encoded, NOT standardised. Codes 0/1/2/3 are labels, not quantities:
+      "thal = 3" is not "three times" "thal = 1". Treating them as numbers is slightly
+      worse (ablation variant D).
+  Binary               sex, fbs, exang
+      Left as 0/1, not standardised (already interpretable).
 
-ANTI-FUITE (DATA LEAKAGE)
--------------------------
-  * Le split train/test est stratifié, random_state = 42, fait AVANT tout
-    apprentissage de statistiques.
-  * Le StandardScaler est ajusté sur le jeu d'entraînement uniquement, puis
-    appliqué tel quel au test (split_and_scale). En validation croisée, il est
-    dans un sklearn Pipeline (model_config.make_pipeline), donc ré-ajusté dans
-    chaque pli d'entraînement.
-  * Le one-hot est calculé avant le split avec pd.get_dummies : cela ne fixe que
-    la liste des colonnes, aucune statistique du jeu de données n'est apprise.
-    On vérifie dans reports/encoding_ablation.md que l'on obtient les mêmes
-    prédictions (écart ~1e-16) avec un OneHotEncoder appris dans chaque pli.
-  * La cible n'apparaît jamais parmi les variables d'entrée.
-  Tout cela est vérifié par tests/test_leakage.py.
+Data leakage safeguards
+-----------------------
+  * The train/test split is stratified, random_state = 42, and done BEFORE anything is learned.
+  * The StandardScaler is fitted on the training set only, then applied unchanged to the test
+    set (split_and_scale). In cross-validation it lives inside a sklearn Pipeline
+    (model_config.make_pipeline), so it is refitted on every training fold.
+  * One-hot encoding happens before the split with pd.get_dummies. It only fixes the list of
+    columns and learns no statistic from the data. reports/encoding_ablation.md shows the
+    predictions are identical (gap ~1e-16) with a OneHotEncoder fitted inside each fold.
+  * The target never appears among the input features.
+  All of this is checked by tests/test_leakage.py.
 """
 
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-CATEGORICAL_COLS = ["cp", "restecg", "slope", "thal"]   # nominales -> one-hot
-NUMERIC_COLS = ["age", "trestbps", "chol", "thalach", "oldpeak", "ca"]   # standardisées
-BINARY_COLS = ["sex", "fbs", "exang"]                   # 0/1, non standardisées
+CATEGORICAL_COLS = ["cp", "restecg", "slope", "thal"]  # nominal -> one-hot
+NUMERIC_COLS = ["age", "trestbps", "chol", "thalach", "oldpeak", "ca"]  # standardised
+BINARY_COLS = ["sex", "fbs", "exang"]  # 0/1, not standardised
 TARGET_COL = "target"
 
 FEATURE_NAMES_READABLE = {
@@ -65,12 +58,11 @@ FEATURE_NAMES_READABLE = {
 }
 
 
-# Signification des codes dans CE fichier heart.csv. Le dictionnaire de données
-# qui circule avec la version Kaggle est inversé pour `cp` et `slope`. Les noms
-# ci-dessous sont déduits en comparant les effectifs de chaque code avec ceux du
-# jeu UCI Cleveland d'origine (ex. cp=0 : 143 patients ~ "asymptomatique" : 144)
-# et vérifiés par les taux de maladie observés. `restecg` : confiance moindre
-# (le groupe de 4 patients est identifié par son effectif uniquement).
+# Meaning of the codes in THIS heart.csv. The data dictionary that circulates with the Kaggle
+# version is inverted for `cp` and `slope`. The names below are inferred by comparing the
+# counts of each code with the original UCI Cleveland data (e.g. cp=0: 143 patients vs
+# "asymptomatic": 144) and checked against the observed disease rates. `restecg` is the least
+# certain: its 4-patient group is identified by its count only.
 CATEGORY_NAMES = {
     "cp": {0: "asymptomatic", 1: "atypical angina", 2: "non-anginal pain", 3: "typical angina"},
     "restecg": {0: "normal", 1: "LV hypertrophy", 2: "ST-T abnormality"},
@@ -80,7 +72,7 @@ CATEGORY_NAMES = {
 
 
 def readable_feature(col: str) -> str:
-    """Nom lisible d'une colonne, y compris les colonnes one-hot (ex. cp_0)."""
+    """Return a readable name for a column, including one-hot columns (e.g. cp_0)."""
     if col in FEATURE_NAMES_READABLE:
         return FEATURE_NAMES_READABLE[col]
     base, _, val = col.rpartition("_")
@@ -89,33 +81,28 @@ def readable_feature(col: str) -> str:
 
 
 def load_data(path="data/heart.csv"):
-    """Charge le dataset brut."""
+    """Load the raw dataset."""
     df = pd.read_csv(path)
     return df
 
 
 def disease_label(df: pd.DataFrame) -> pd.Series:
     """
-    Retourne l'étiquette "maladie cardiaque présente" (1 = malade, 0 = sain).
+    Return the "heart disease present" label (1 = disease, 0 = healthy).
 
-    ATTENTION : dans ce fichier heart.csv (version Kaggle du dataset UCI
-    Cleveland), la colonne `target` est INVERSÉE : target=1 correspond à
-    l'ABSENCE de maladie (165 sujets) et target=0 à sa PRÉSENCE (138 sujets).
-    On le vérifie sur les données : les patients avec target=0 ont plus
-    souvent une angine d'effort, plus de vaisseaux atteints, un ST plus
-    déprimé et une fréquence cardiaque max plus basse. Voir
-    tests/test_preprocessing.py::test_disease_label_is_medically_consistent.
+    WARNING: in this heart.csv (the Kaggle version of the UCI Cleveland data) the `target`
+    column is INVERTED: target=1 means NO disease (165 patients) and target=0 means disease
+    (138 patients). The data shows it: target=0 patients more often have exercise-induced
+    angina, more diseased vessels, a deeper ST depression and a lower maximum heart rate.
+    See tests/test_preprocessing.py::test_disease_label_is_medically_consistent.
     """
     return (1 - df[TARGET_COL]).astype(int).rename("disease")
 
 
 def build_preprocessed_dataset(df: pd.DataFrame):
-    """
-    Encode les variables catégorielles en one-hot, garde le reste tel quel.
-    Retourne X (DataFrame), y (Series) et la liste finale des colonnes.
-    """
+    """One-hot encode the categorical variables and return the features X and the label y."""
     df = df.copy()
-    y = disease_label(df)  # 1 = maladie présente (cf. disease_label)
+    y = disease_label(df)
     X = df.drop(columns=[TARGET_COL])
 
     X = pd.get_dummies(X, columns=CATEGORICAL_COLS, drop_first=False)
@@ -125,7 +112,7 @@ def build_preprocessed_dataset(df: pd.DataFrame):
 
 
 def split_data(X, y, test_size=0.2, random_state=42):
-    """Split train/test stratifié (sans standardisation)."""
+    """Stratified train/test split, without scaling."""
     return train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
@@ -133,8 +120,8 @@ def split_data(X, y, test_size=0.2, random_state=42):
 
 def split_and_scale(X, y, test_size=0.2, random_state=42):
     """
-    Split train/test stratifié + standardisation des colonnes numériques.
-    On scale uniquement NUMERIC_COLS pour garder les colonnes one-hot en 0/1.
+    Stratified train/test split, then scale the numeric columns with a scaler fitted on the
+    training set only. One-hot and binary columns stay 0/1. Returns the scaler as well.
     """
     X_train, X_test, y_train, y_test = split_data(X, y, test_size, random_state)
 
@@ -154,4 +141,4 @@ if __name__ == "__main__":
     X, y = build_preprocessed_dataset(df)
     X_train, X_test, y_train, y_test, scaler = split_and_scale(X, y)
     print("Train:", X_train.shape, "Test:", X_test.shape)
-    print("Colonnes finales:", X.columns.tolist())
+    print("Final columns:", X.columns.tolist())

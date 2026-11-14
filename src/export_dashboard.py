@@ -17,11 +17,10 @@ import os
 import re
 import sys
 
-import joblib
-import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from inference import load_bundle, scale_encoded  # noqa: E402
 from preprocessing import (  # noqa: E402
     CATEGORICAL_COLS, CATEGORY_NAMES, NUMERIC_COLS, build_preprocessed_dataset, load_data,
     readable_feature, split_and_scale,
@@ -112,23 +111,28 @@ def js_constants(bundle, X, X_train):
     base = X_train.mean()
     # importance globale : |contribution SHAP| moyenne par VARIABLE clinique (colonnes one-hot
     # additionnées), sur les 303 patients. Exact pour un modèle linéaire : coef * (x - moyenne train).
-    Xs = X.copy()
-    Xs[numeric] = scaler.transform(X[numeric])
-    Xs = Xs[cols]
+    Xs = scale_encoded(X, bundle)
     shap_cols = pd.DataFrame((Xs.values - base.values) * coef, columns=cols, index=Xs.index)
     imp = aggregate_by_variable(shap_cols).abs().mean().sort_values(ascending=False)
     top = list(imp.items())
-    f = lambda v: f"{float(v):.6f}"
-    obj = lambda d: "{" + ",".join(f"{k}:{f(v)}" for k, v in d.items()) + "}"
+
+    def fmt6(value):
+        """Format a number with 6 decimals, as embedded in the JavaScript constants."""
+        return f"{float(value):.6f}"
+
+    def js_object(mapping):
+        """Render a dict of numbers as a JavaScript object literal."""
+        return "{" + ",".join(f"{key}:{fmt6(value)}" for key, value in mapping.items()) + "}"
+
     labels = {c: readable_feature(c) for c in cols}
     return "\n".join([
         "const COLUMNS=" + json.dumps(cols) + ";",
-        "const COEF=[" + ",".join(f(v) for v in coef) + "];",
-        f"const INTERCEPT={f(model.intercept_[0])};",
+        "const COEF=[" + ",".join(fmt6(v) for v in coef) + "];",
+        f"const INTERCEPT={fmt6(model.intercept_[0])};",
         "const NUMERIC=" + json.dumps(numeric) + ";",
-        "const SMEAN=" + obj(dict(zip(numeric, scaler.mean_))) + ";",
-        "const SSCALE=" + obj(dict(zip(numeric, scaler.scale_))) + ";",
-        "const BASE=" + obj({c: base[c] for c in cols}) + ";",
+        "const SMEAN=" + js_object(dict(zip(numeric, scaler.mean_))) + ";",
+        "const SSCALE=" + js_object(dict(zip(numeric, scaler.scale_))) + ";",
+        "const BASE=" + js_object({c: base[c] for c in cols}) + ";",
         "const LABELS=" + json.dumps(labels, ensure_ascii=False) + ";",
         "const CATEGORICAL=" + json.dumps(CATEGORICAL_COLS) + ";",
         "const VARLABELS=" + json.dumps({v: variable_label(v) for v, _ in top}, ensure_ascii=False) + ";",
@@ -148,12 +152,17 @@ def dash_stats(res, name):
 
 def roc_svg(curve):
     pts = " ".join(f"{30 + x*180:.0f},{140 - y*130:.0f}" for x, y in zip(curve["fpr"], curve["tpr"]))
-    t = lambda x, y, s: f'<text x="{x}" y="{y}" font-size="7" fill="var(--sub)">{s}</text>'
+
+    def svg_text(x, y, text):
+        """One axis label of the ROC chart."""
+        return f'<text x="{x}" y="{y}" font-size="7" fill="var(--sub)">{text}</text>'
+
     return ('<svg viewBox="0 0 220 160" style="width:100%;max-width:280px">'
         '<line x1="30" y1="10" x2="30" y2="140" stroke="var(--border)"/><line x1="30" y1="140" x2="210" y2="140" stroke="var(--border)"/>'
         '<line x1="30" y1="140" x2="210" y2="10" stroke="var(--border)" stroke-dasharray="3,3"/>'
         f'<polyline fill="none" stroke="#0f9488" stroke-width="2.2" points="{pts}"/>'
-        + t(8, 14, "1") + t(6, 79, "0.5") + t(6, 143, "0") + t(26, 152, "0") + t(118, 152, "0.5") + t(196, 152, "1") + t(100, 159, "FPR")
+        + svg_text(8, 14, "1") + svg_text(6, 79, "0.5") + svg_text(6, 143, "0") + svg_text(26, 152, "0")
+        + svg_text(118, 152, "0.5") + svg_text(196, 152, "1") + svg_text(100, 159, "FPR")
         + "</svg>")
 
 
@@ -162,10 +171,17 @@ def perf_html(res, name):
     m = mod["metrics"]
     (tn, fp), (fn, tp) = mod["pooled_oof"]["confusion_matrix"]
     n = res["settings"]["n_patients"]
-    card = lambda col, ic, lab, k, fmt: (f'<div class="stat">{icon_box(col, ic, 17)}<b>{fmt(m,k)}</b>'
-        f'<div class="lbl">{lab}</div><div class="sub">± {m[k]["std"]*(100 if k!="roc_auc" else 1):.{1 if k!="roc_auc" else 3}f} (std)</div></div>')
-    p1 = lambda m_, k: pct(m_, k)
-    p3 = lambda m_, k: f'{m_[k]["mean"]:.3f}'
+
+    def mean_3_decimals(metrics, key):
+        """Mean of a metric with 3 decimals (used for ROC-AUC, which is not a percentage)."""
+        return f'{metrics[key]["mean"]:.3f}'
+
+    def metric_card(color, icon, label, key, format_mean):
+        """One KPI card: the metric mean and its standard deviation across the outer folds."""
+        scale, decimals = (1, 3) if key == "roc_auc" else (100, 1)
+        return (f'<div class="stat">{icon_box(color, icon, 17)}<b>{format_mean(m, key)}</b>'
+                f'<div class="lbl">{label}</div><div class="sub">± {m[key]["std"] * scale:.{decimals}f} (std)</div></div>')
+
     sel_f1 = max(res["models"], key=lambda k: res["models"][k]["metrics"]["f1"]["mean"])
     rows = ""
     for mn, mv in res["models"].items():
@@ -178,26 +194,30 @@ def perf_html(res, name):
         rows += (f'          <tr{style}><td>{mn}{badge}</td><td>{pm_pct(mm,"accuracy")}</td><td>{pm_pct(mm,"precision")}</td>'
                  f'<td>{pm_pct(mm,"recall")}</td><td>{pm_pct(mm,"specificity")}</td><td>{f1}</td><td>{pm(mm,"roc_auc")}</td></tr>\n')
     pooled_auc = mod["pooled_oof"]["roc_auc"]
-    cell = lambda cls, v, lab: f'<div class="{cls}"><b>{v}</b><br>{lab}</div>'
-    lab = 'color:var(--sub);font-size:11px'
+
+    def matrix_cell(css_class, value, label):
+        """One cell of the confusion matrix."""
+        return f'<div class="{css_class}"><b>{value}</b><br>{label}</div>'
+
+    muted = 'color:var(--sub);font-size:11px'
     return f'''
       <h3 style="font-size:19px;margin:2px 0 2px">Model Performance</h3>
       <p class="desc" style="margin-bottom:18px">Nested 5-fold stratified cross-validation, {name}: mean over the 5 outer folds ({n} patients; hyperparameters tuned on the inner loop only)</p>
       <div class="grid5">
-        {card("teal","target","Accuracy","accuracy",p1)}
-        {card("blue","trend","Precision","precision",p1)}
-        {card("purple","pulse","Recall","recall",p1)}
-        {card("orange","bolt","F1 Score","f1",p1)}
-        {card("teal","bars","ROC-AUC","roc_auc",p3)}
+        {metric_card("teal","target","Accuracy","accuracy",pct)}
+        {metric_card("blue","trend","Precision","precision",pct)}
+        {metric_card("purple","pulse","Recall","recall",pct)}
+        {metric_card("orange","bolt","F1 Score","f1",pct)}
+        {metric_card("teal","bars","ROC-AUC","roc_auc",mean_3_decimals)}
       </div>
       <div class="grid2">
         <div class="card">
           <h3>Confusion Matrix</h3>
           <p class="desc">Out-of-fold predictions, {n} patients ({name}, threshold 0.5)</p>
           <div class="matrix">
-            <div></div><div style="{lab}">Pred: Healthy</div><div style="{lab}">Pred: Disease</div>
-            <div style="{lab};text-align:right;padding-right:6px">Actual: Healthy</div>{cell("mcell-tn", tn, "TN")}{cell("mcell-fp", fp, "FP")}
-            <div style="{lab};text-align:right;padding-right:6px">Actual: Disease</div>{cell("mcell-fn", fn, "FN")}{cell("mcell-tp", tp, "TP")}
+            <div></div><div style="{muted}">Pred: Healthy</div><div style="{muted}">Pred: Disease</div>
+            <div style="{muted};text-align:right;padding-right:6px">Actual: Healthy</div>{matrix_cell("mcell-tn", tn, "TN")}{matrix_cell("mcell-fp", fp, "FP")}
+            <div style="{muted};text-align:right;padding-right:6px">Actual: Disease</div>{matrix_cell("mcell-fn", fn, "FN")}{matrix_cell("mcell-tp", tp, "TP")}
           </div>
           <p class="desc" style="margin-top:12px">{fn} of {fn+tp} diseased patients are missed (false negatives) — the costliest error type in a screening context.</p>
         </div>
@@ -232,7 +252,7 @@ def options(feature, default):
 def main():
     with open(os.path.join(ROOT, "models", "cv_results.json"), encoding="utf-8") as f:
         res = json.load(f)
-    bundle = joblib.load(os.path.join(ROOT, "models", "best_model.joblib"))
+    bundle = load_bundle()
     name = bundle["model_name"]
     if name != "Logistic Regression":
         sys.exit("Le calcul local du dashboard suppose une régression logistique "

@@ -1,241 +1,214 @@
 """
-app.py
-------
-Mini-application Streamlit : l'utilisateur saisit les caractéristiques
-d'un patient et obtient une prédiction + une explication SHAP.
-Thème visuel aligné sur web/index.html (HeartAI).
+Streamlit app: enter a patient, get the prediction and its SHAP explanation.
 
-Projet académique de démonstration — ne constitue en aucun cas un outil
-de diagnostic médical.
+The result updates automatically whenever a field changes (no button to click). For each
+patient the app shows:
+  - the predicted class, the probability of disease and the complementary probability;
+  - the SHAP waterfall plot of this patient;
+  - the main influential features, with a short written interpretation.
+
+Educational and research use only: this is not a medical diagnostic tool. SHAP explains the
+behaviour of the model, not a medical cause-and-effect relationship.
+
+Run with:  streamlit run app.py
 """
 
-import streamlit as st
-import pandas as pd
-import shap
-import joblib
-import sys
+import inspect
+import json
 import os
+import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from preprocessing import (
-    NUMERIC_COLS, CATEGORICAL_COLS, CATEGORY_NAMES, load_data, build_preprocessed_dataset,
-    split_and_scale,
+import matplotlib.pyplot as plt
+import pandas as pd
+import streamlit as st
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(ROOT, "src"))
+from app_ui import (  # noqa: E402
+    STYLE_HTML, cascade_html, class_color, header_html, influence_rows_html, kpi_card, meter_html,
 )
-from shap_utils import (
+from inference import (  # noqa: E402
+    DATA_PATH, MODEL_PATH, encode_patients, load_bundle, make_explainer, training_background,
+    unpack_explanation,
+)
+from preprocessing import CATEGORY_NAMES, load_data  # noqa: E402
+from shap_plots import waterfall_figure  # noqa: E402
+from shap_utils import (  # noqa: E402
     CAVEAT, DISCLAIMER, aggregate_by_variable, base_probability, describe_patient, output_space,
-    sigmoid, value_label, variable_label,
 )
 
-st.set_page_config(page_title="HeartAI — Explainable Prediction", page_icon="🫀", layout="wide")
+st.set_page_config(page_title="HeartAI — Prédiction et explication SHAP", page_icon="🫀", layout="wide")
 
-# ---------------------------------------------------------------- THEME CSS
-st.markdown("""
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;800&display=swap" rel="stylesheet">
-<style>
-:root{
-  --accent:#0f9488; --accent-light:#e6f7f5; --navy1:#0f172a; --navy2:#134e4a;
-  --red:#e0546a; --red-bg:#fdecef; --green-bg:#e6f7f5;
-}
-.block-container{padding-top:2rem; max-width:1100px}
-h1, .hero-title{font-family:'Fraunces',Georgia,serif !important; font-weight:800 !important}
-[data-testid="stSidebar"]{background:#ffffff; border-right:1px solid #e5e9ee}
-[data-testid="stSidebar"] h2{font-size:15px !important}
-.stButton>button{background:var(--accent); color:#fff; border:none; border-radius:10px;
-  padding:0.6rem 1.2rem; font-weight:700; width:100%}
-.stButton>button:hover{background:#0b6f66; color:#fff}
-.hero{border-radius:16px; padding:34px; background:linear-gradient(135deg,var(--navy1),var(--navy2));
-  color:#fff; margin-bottom:22px}
-.hero .tag{font-size:11px; letter-spacing:.06em; color:#7dd3c8; text-transform:uppercase; font-weight:600}
-.hero h1{color:#fff !important; font-size:34px !important; margin:10px 0 8px !important; line-height:1.15}
-.hero h1 span{color:#5eead4}
-.hero p{color:#c9d3dc; font-size:14px; max-width:560px; margin:0}
-.stat-card{background:#fff; border:1px solid #e5e9ee; border-radius:12px; padding:16px}
-.stat-card .icn{width:34px; height:34px; border-radius:9px; display:flex; align-items:center;
-  justify-content:center; font-size:16px; margin-bottom:8px}
-.stat-card b{font-size:21px; display:block}
-.stat-card .lbl{font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.03em; margin-top:2px}
-.result-banner{border-radius:12px; padding:18px 20px; margin:6px 0 16px}
-.result-banner.risk{background:var(--red-bg); color:var(--red)}
-.result-banner.safe{background:var(--green-bg); color:var(--accent)}
-.result-banner b{font-size:17px}
-.bar-row{display:grid; grid-template-columns:190px 1fr 60px; align-items:center; gap:10px;
-  margin-bottom:9px; font-size:13px}
-.bar-track{height:15px; background:#f4f6f8; border-radius:5px; overflow:hidden}
-.bar-fill{height:100%; border-radius:5px}
-.wf-head,.wf-row{display:grid; grid-template-columns:210px 1fr 52px 58px; align-items:center; gap:10px}
-.wf-head{font-size:10.5px; color:#6b7280; text-transform:uppercase; letter-spacing:.04em; margin:12px 0 6px; font-weight:600}
-.wf-head span:nth-child(n+3), .wf-x, .wf-p{text-align:right}
-.wf-row{margin-bottom:7px; font-size:12.5px}
-.wf-row.edge{font-weight:600; padding:5px 0; border-top:1px dashed #e5e9ee}
-.wf-row.edge.first{border-top:none; border-bottom:1px dashed #e5e9ee}
-.wf-track{position:relative; height:16px; background:#f4f6f8; border-radius:5px}
-.wf-bar{position:absolute; top:0; height:100%; border-radius:4px; min-width:3px}
-.wf-dot{position:absolute; top:-3px; width:4px; height:22px; background:#111827; border-radius:2px; transform:translateX(-2px)}
-.wf-p{color:#6b7280}
-.note{background:var(--accent-light); border:1px solid #e5e9ee; border-radius:10px; padding:12px 14px;
-  font-size:12.5px; line-height:1.55; margin-top:14px}
-.section-tag{font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.04em;
-  font-weight:700; margin:14px 0 2px}
-</style>
-""", unsafe_allow_html=True)
+# Two TEST-set patients (never seen during training): the ones explained in the README.
+PRESET_ROWS = {"high": 191, "low": 162}
+DEFAULTS = dict(age=50, sex=1, cp=3, trestbps=120, chol=240, fbs=0, restecg=0, thalach=150,
+                exang=0, oldpeak=1.0, slope=1, ca=0, thal=2)
+RANGES = dict(age=(20, 90), trestbps=(90, 200), chol=(100, 600), thalach=(60, 220), oldpeak=(0.0, 6.0))
+METRIC_KEYS = ("accuracy", "precision", "recall", "specificity", "f1", "roc_auc", "pr_auc")
+METRIC_LABELS = ["Accuracy", "Precision", "Recall", "Specificity", "F1-score", "ROC-AUC", "PR-AUC"]
 
-# ---------------------------------------------------------------- MODEL
-@st.cache_resource
-def load_model():
-    return joblib.load("models/best_model.joblib")
+st.markdown(STYLE_HTML, unsafe_allow_html=True)
 
-bundle = load_model()
-model, scaler, columns, model_name = bundle["model"], bundle["scaler"], bundle["columns"], bundle["model_name"]
+
+def stretch(widget):
+    """Full-width keyword for `widget`, whichever Streamlit version is installed."""
+    return {"width": "stretch"} if "width" in inspect.signature(widget).parameters else {"use_container_width": True}
 
 
 @st.cache_resource
-def load_background():
-    """Référence (train set) pour SHAP — sans ça LinearExplainer prend le
-    patient lui-même comme baseline et toutes les contributions tombent à 0."""
-    df = load_data()
-    X, y = build_preprocessed_dataset(df)
-    X_train, X_test, y_train, y_test, _ = split_and_scale(X, y)
-    return X_train
+def load_resources():
+    """Load the model, the dataset, the SHAP explainer and the cross-validation results once."""
+    bundle = load_bundle(MODEL_PATH)
+    explainer = make_explainer(bundle["model"], training_background())
+    cv_path = os.path.join(ROOT, "models", "cv_results.json")
+    cv_results = json.load(open(cv_path, encoding="utf-8")) if os.path.exists(cv_path) else None
+    return bundle, load_data(DATA_PATH), explainer, cv_results
 
 
-background = load_background()
-
-# ---------------------------------------------------------------- HERO
-st.markdown(f"""
-<div class="hero">
-  <div class="tag">AI Healthcare · Portfolio Project</div>
-  <h1>Heart Disease<br><span>Prediction</span></h1>
-  <p>Cette application prédit le risque de maladie cardiaque coronarienne à partir des données
-  cliniques d'un patient, et explique chaque prédiction avec SHAP. Modèle : <b style="color:#fff">{model_name}</b>.</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ---------------------------------------------------------------- SIDEBAR FORM
-st.sidebar.markdown("## Patient Information")
-age = st.sidebar.slider("Age", 20, 90, 50)
-sex = st.sidebar.selectbox("Sex", [1, 0], format_func=lambda x: "Male" if x == 1 else "Female")
-
-st.sidebar.markdown("## Clinical Information")
-cp = st.sidebar.selectbox("Chest pain type", [0, 1, 2, 3], format_func=lambda x: CATEGORY_NAMES["cp"][x].capitalize())
-trestbps = st.sidebar.slider("Resting blood pressure (mm Hg)", 90, 200, 120)
-chol = st.sidebar.slider("Cholesterol (mg/dl)", 100, 600, 240)
-fbs = st.sidebar.selectbox("Fasting blood sugar > 120 mg/dl", [0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
-restecg = st.sidebar.selectbox("Resting ECG", [0, 1, 2], format_func=lambda x: CATEGORY_NAMES["restecg"][x].capitalize())
-thalach = st.sidebar.slider("Max heart rate achieved", 60, 220, 150)
-exang = st.sidebar.selectbox("Exercise-induced angina", [0, 1], format_func=lambda x: "No" if x == 0 else "Yes")
-
-st.sidebar.markdown("## Additional Clinical Data")
-oldpeak = st.sidebar.slider("ST depression (oldpeak)", 0.0, 6.0, 1.0, step=0.1)
-slope = st.sidebar.selectbox("Slope of peak exercise ST segment", [0, 1, 2], index=1, format_func=lambda x: CATEGORY_NAMES["slope"][x].capitalize())
-ca = st.sidebar.selectbox("Major vessels colored (0-3)", [0, 1, 2, 3])
-thal = st.sidebar.selectbox("Thalassemia", [0, 1, 2, 3], index=2, format_func=lambda x: CATEGORY_NAMES["thal"][x].capitalize())
-
-predict_btn = st.sidebar.button("Predict Heart Disease Risk →")
+bundle, dataset, explainer, cv_results = load_resources()
+model, model_name = bundle["model"], bundle["model_name"]
 
 
-def raw_patient():
-    return {"age": age, "sex": sex, "cp": cp, "trestbps": trestbps, "chol": chol,
-           "fbs": fbs, "restecg": restecg, "thalach": thalach, "exang": exang,
-           "oldpeak": oldpeak, "slope": slope, "ca": ca, "thal": thal}
+def preset_from_row(row_index):
+    """Form values of a dataset row, clipped to the ranges of the input widgets."""
+    row = dataset.loc[row_index]
+    values = {}
+    for field in DEFAULTS:
+        value = float(row[field]) if field == "oldpeak" else int(row[field])
+        if field in RANGES:
+            value = min(max(value, RANGES[field][0]), RANGES[field][1])
+        values[field] = value
+    return values
 
 
-def build_patient_row():
-    raw = raw_patient()
-    df_encoded = pd.get_dummies(pd.DataFrame([raw]), columns=CATEGORICAL_COLS)
-    for col in columns:
-        if col not in df_encoded.columns:
-            df_encoded[col] = 0
-    df_encoded = df_encoded[columns].astype("float64")
-    numeric_present = [c for c in NUMERIC_COLS if c in df_encoded.columns]
-    df_encoded[numeric_present] = scaler.transform(df_encoded[numeric_present])
-    return df_encoded
+def apply_values(values):
+    """Button callback: write `values` into the widget state."""
+    for field, value in values.items():
+        st.session_state[field] = value
 
 
-# ---------------------------------------------------------------- RESULT
-if predict_btn:
-    patient_df = build_patient_row()
-    proba = model.predict_proba(patient_df)[0]
-    pred = model.predict(patient_df)[0]
+def yes_no(flag):
+    """Display name of a 0/1 flag."""
+    return "Yes" if flag == 1 else "No"
 
-    col1, col2 = st.columns([1, 1.3])
 
-    with col1:
-        banner_class = "risk" if pred == 1 else "safe"
-        label = "Heart disease likely (model estimate)" if pred == 1 else "Heart disease unlikely (model estimate)"
-        st.markdown(f"""
-        <div class="result-banner {banner_class}">
-          <b>{label}</b><br>
-          <span style="font-size:13px">Estimated probability: {proba[1]*100:.1f}% · complement: {proba[0]*100:.1f}%</span>
-        </div>
-        """, unsafe_allow_html=True)
+def sex_label(code):
+    """Display name of the sex code."""
+    return "Male" if code == 1 else "Female"
 
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"""<div class="stat-card"><div class="icn" style="background:#e6f7f2;color:#0f9488">◎</div>
-            <b>{proba[1]*100:.1f}%</b><div class="lbl">Disease probability</div></div>""", unsafe_allow_html=True)
-        with c2:
-            st.markdown(f"""<div class="stat-card"><div class="icn" style="background:#eaf0ff;color:#3b6fe0">◉</div>
-            <b>{model_name}</b><div class="lbl">Model used</div></div>""", unsafe_allow_html=True)
 
-    with col2:
-        st.markdown('<div class="section-tag">Why this prediction — SHAP</div>', unsafe_allow_html=True)
+def category_formatter(variable):
+    """Return a formatter showing the readable name of a category code of `variable`."""
+    def format_code(code):
+        return CATEGORY_NAMES[variable][code].capitalize()
+    return format_code
 
-        if type(model).__name__ in ("RandomForestClassifier", "XGBClassifier"):
-            explainer = shap.TreeExplainer(model)
-        else:
-            explainer = shap.LinearExplainer(
-                model, shap.maskers.Independent(background, max_samples=len(background))
-            )
-        sv = explainer(patient_df)
-        if sv.values.ndim == 3:
-            values, base = sv.values[0, :, 1], float(sv.base_values[0, 1])
-        else:
-            values, base = sv.values[0], float(sv.base_values[0])
 
-        raw = raw_patient()
-        by_var = aggregate_by_variable(pd.DataFrame([values], columns=patient_df.columns)).iloc[0]
-        base_p = base_probability(model, base)
-        linear = output_space(model) == "log-odds"
-        order = by_var.sort_values(key=abs, ascending=False)
-        head, tail = order.iloc[:8], order.iloc[8:]
+for field, default in DEFAULTS.items():
+    st.session_state.setdefault(field, default)
 
-        steps = [(f"{variable_label(v)}: {value_label(v, raw[v])}", float(x)) for v, x in head.items()]
-        if len(tail):
-            steps.append((f"{len(tail)} autres variables", float(tail.sum())))
-        cum, rows = base, []
-        for lab, x in steps:
-            rows.append((lab, x, cum, cum + x))
-            cum += x
-        pts = [base, cum] + [r[2] for r in rows] + [r[3] for r in rows]
-        lo, hi = min(pts), max(pts)
-        pad = (hi - lo) * 0.06 or 0.1
-        lo, hi = lo - pad, hi + pad
-        pos = lambda v: (v - lo) / (hi - lo) * 100
-        prob = lambda v: f"{sigmoid(v) * 100:.0f} %" if linear else "—"
+# ------------------------------------------------------------------ patient form
+sidebar = st.sidebar
+sidebar.markdown("### Exemples")
+high_column, low_column = sidebar.columns(2)
+high_column.button("Risque élevé", on_click=apply_values, args=(preset_from_row(PRESET_ROWS["high"]),), **stretch(st.button))
+low_column.button("Risque faible", on_click=apply_values, args=(preset_from_row(PRESET_ROWS["low"]),), **stretch(st.button))
+sidebar.button("Réinitialiser", on_click=apply_values, args=(DEFAULTS,), **stretch(st.button))
 
-        html = ('<p style="font-size:12px;color:#6b7280;margin-bottom:4px"><span style="color:#e0546a">■</span> '
-                'pousse vers « maladie » &nbsp; <span style="color:#0f9488">■</span> pousse vers « sain »</p>'
-                '<div class="wf-head"><span>Variable : valeur du patient</span><span></span><span>Effet</span>'
-                '<span>Prob. cumulée</span></div>')
-        html += (f'<div class="wf-row edge first"><span>Patient moyen (valeur de base)</span><div class="wf-track">'
-                 f'<div class="wf-dot" style="left:{pos(base):.2f}%"></div></div><span></span>'
-                 f'<span class="wf-p"><b>{base_p * 100:.0f} %</b></span></div>')
-        for lab, x, a_, b_ in rows:
-            color = "#e0546a" if x > 0 else "#0f9488"
-            html += (f'<div class="wf-row"><span>{lab}</span><div class="wf-track"><div class="wf-bar" '
-                     f'style="left:{pos(min(a_, b_)):.2f}%;width:{abs(b_ - a_) / (hi - lo) * 100:.2f}%;background:{color}"></div></div>'
-                     f'<span class="wf-x" style="color:{color}">{x:+.2f}</span><span class="wf-p">{prob(b_)}</span></div>')
-        html += (f'<div class="wf-row edge"><span>Prédiction du modèle</span><div class="wf-track">'
-                 f'<div class="wf-dot" style="left:{pos(cum):.2f}%"></div></div><span></span>'
-                 f'<span class="wf-p"><b>{proba[1] * 100:.0f} %</b></span></div>')
-        html += ('<div class="note"><b>Comment lire ce graphique.</b> On part du patient moyen (en haut). Chaque barre '
-                 'déplace la probabilité estimée : rouge vers « maladie », vert vers « sain », et la colonne de droite '
-                 'donne la probabilité après cette étape. Les effets s\'additionnent exactement jusqu\'à la prédiction du '
-                 'modèle (en bas). Les longueurs sont en log-odds, pas en points de pourcentage.</div>')
-        st.markdown(html, unsafe_allow_html=True)
+sidebar.markdown("### Patient")
+sidebar.slider("Age", *RANGES["age"], key="age")
+sidebar.selectbox("Sex", [1, 0], key="sex", format_func=sex_label)
+sidebar.markdown("### Clinique")
+sidebar.selectbox("Chest pain type", [0, 1, 2, 3], key="cp", format_func=category_formatter("cp"))
+sidebar.slider("Resting blood pressure (mm Hg)", *RANGES["trestbps"], key="trestbps")
+sidebar.slider("Cholesterol (mg/dl)", *RANGES["chol"], key="chol")
+sidebar.selectbox("Fasting blood sugar > 120 mg/dl", [0, 1], key="fbs", format_func=yes_no)
+sidebar.selectbox("Resting ECG", [0, 1, 2], key="restecg", format_func=category_formatter("restecg"))
+sidebar.slider("Max heart rate achieved", *RANGES["thalach"], key="thalach")
+sidebar.selectbox("Exercise-induced angina", [0, 1], key="exang", format_func=yes_no)
+sidebar.markdown("### Examens complémentaires")
+sidebar.slider("ST depression (oldpeak)", *RANGES["oldpeak"], step=0.1, key="oldpeak")
+sidebar.selectbox("Slope of peak exercise ST segment", [0, 1, 2], key="slope", format_func=category_formatter("slope"))
+sidebar.selectbox("Major vessels colored (0-3)", [0, 1, 2, 3], key="ca")
+sidebar.selectbox("Thalassemia", [0, 1, 2, 3], key="thal", format_func=category_formatter("thal"))
 
+patient = {field: st.session_state[field] for field in DEFAULTS}
+
+# ------------------------------------------------------------------ prediction and explanation (on every change)
+patient_features = encode_patients(patient, bundle)
+probability = float(model.predict_proba(patient_features)[0, 1])
+predicted_class = int(model.predict(patient_features)[0])
+
+all_values, base_value = unpack_explanation(explainer(patient_features))
+contribution_by_variable = aggregate_by_variable(
+    pd.DataFrame([all_values[0]], columns=patient_features.columns)).iloc[0]
+average_patient_probability = base_probability(model, base_value)
+is_log_odds = output_space(model) == "log-odds"
+
+st.markdown(header_html(DISCLAIMER), unsafe_allow_html=True)
+
+# ------------------------------------------------------------------ result cards
+risk_class = "risk" if predicted_class == 1 else "safe"
+class_name = "Maladie probable" if predicted_class == 1 else "Maladie peu probable"
+kpi_class, kpi_probability, kpi_complement, kpi_model = st.columns(4)
+kpi_class.markdown(kpi_card("Classe prédite", class_name, f"classe {predicted_class} (seuil de décision : 50 %)", css=risk_class),
+                   unsafe_allow_html=True)
+kpi_probability.markdown(
+    kpi_card("Probabilité de maladie", f"{probability * 100:.1f} %",
+             meter=meter_html(probability, class_color(predicted_class))),
+    unsafe_allow_html=True)
+kpi_complement.markdown(kpi_card("Probabilité d'absence de maladie", f"{(1 - probability) * 100:.1f} %", "complément à 100 %"),
+                        unsafe_allow_html=True)
+kpi_model.markdown(kpi_card("Modèle", model_name, f"patient moyen : {average_patient_probability * 100:.0f} %",
+                            value_style="font-size:18px"), unsafe_allow_html=True)
+
+# ------------------------------------------------------------------ waterfall + influential features
+waterfall_column, influence_column = st.columns([1.15, 1], gap="large")
+with waterfall_column:
+    st.markdown('<h4 class="sec">SHAP Waterfall Plot de ce patient</h4>', unsafe_allow_html=True)
+    figure = waterfall_figure(contribution_by_variable, base_value, patient, "Patient saisi dans le formulaire",
+                              probability, average_patient_probability)
+    st.pyplot(figure, **stretch(st.pyplot))
+    plt.close(figure)
+    st.caption("On part du patient moyen (valeur de base, en bas) ; chaque barre ajoute la contribution d'une variable "
+               "(rouge : vers « maladie », bleu : vers « sain »). En haut, f(x) est la sortie du modèle pour ce patient, "
+               "en log-odds.")
+
+with influence_column:
+    st.markdown('<h4 class="sec">Principales caractéristiques influentes</h4>', unsafe_allow_html=True)
+    st.markdown(influence_rows_html(contribution_by_variable, patient), unsafe_allow_html=True)
+    st.markdown('<div class="note"><b>Lecture.</b> Les barres rouges augmentent la probabilité de maladie estimée par le modèle, '
+                'les vertes la réduisent. La valeur est la contribution SHAP en log-odds.</div>', unsafe_allow_html=True)
     st.markdown("#### En clair")
-    st.markdown(describe_patient(raw, by_var, float(proba[1]), base_p))
-    st.warning(f"**{CAVEAT}** {DISCLAIMER}")
-else:
-    st.info("Renseigne les caractéristiques du patient dans le panneau de gauche, puis clique sur **Predict**.")
+    st.markdown(describe_patient(patient, contribution_by_variable, probability, average_patient_probability))
+
+# ------------------------------------------------------------------ details
+tab_cascade, tab_shap, tab_model = st.tabs(["Cascade en probabilité", "Comprendre SHAP", "À propos du modèle"])
+
+with tab_cascade:
+    st.markdown(cascade_html(contribution_by_variable, patient, base_value, average_patient_probability, probability,
+                             is_log_odds), unsafe_allow_html=True)
+    st.caption("Même explication que le waterfall, traduite en probabilité : la colonne de droite donne la probabilité "
+               "estimée après chaque étape.")
+
+with tab_shap:
+    st.markdown(
+        "- SHAP répartit l'écart entre la prédiction de ce patient et celle d'un **patient moyen** du jeu d'entraînement.\n"
+        "- Les contributions sont **additives** : valeur de base + somme des contributions = sortie du modèle.\n"
+        "- Les colonnes encodées d'une même variable (type de douleur, thalassémie…) sont additionnées : "
+        "**une barre par variable clinique**.")
+    st.warning(f"**{CAVEAT}**")
+
+with tab_model:
+    st.markdown(f"**Modèle déployé :** {model_name} — hyperparamètres : `{bundle.get('hyperparameters')}`")
+    if cv_results:
+        metrics = cv_results["models"][cv_results["selected_model"]]["metrics"]
+        st.markdown("Performance en validation croisée imbriquée (5 plis, 303 patients), moyenne ± écart-type :")
+        st.dataframe(pd.DataFrame({
+            "Métrique": METRIC_LABELS,
+            "Valeur": [f"{metrics[key]['mean']:.3f} ± {metrics[key]['std']:.3f}" for key in METRIC_KEYS],
+        }), hide_index=True, **stretch(st.dataframe))
+    st.markdown("Données : UCI Heart Disease (Cleveland), 303 patients. Les trois modèles testés sont statistiquement "
+                "équivalents ; la régression logistique est retenue pour sa simplicité et son explicabilité exacte.")
+
+st.caption(f"{DISCLAIMER}")

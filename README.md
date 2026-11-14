@@ -4,7 +4,9 @@
 
 Prédiction du risque de maladie cardiaque à partir de 13 variables cliniques, avec **explication de chaque prédiction par SHAP**, une évaluation par **validation croisée imbriquée** et une **analyse des erreurs**.
 
-> **Avertissement** : exercice académique de machine learning et d'explicabilité. Ce n'est pas un outil de diagnostic médical et il ne doit pas servir à une décision clinique.
+> **Avertissement** : application à visée éducative et de recherche. Ce n'est pas un outil de diagnostic médical et elle ne doit pas servir à une décision clinique.
+
+**Démo en ligne** : _lien Streamlit Cloud à ajouter après le déploiement (voir « Déployer l'application Streamlit »)._
 
 ## Résultats en bref
 
@@ -19,6 +21,65 @@ Prédiction du risque de maladie cardiaque à partir de 13 variables cliniques, 
 | PR-AUC | 0.900 ± 0.050 |
 
 Validation croisée stratifiée imbriquée (5 plis), 303 patients, moyenne ± écart-type entre plis. **Les trois modèles testés ne se distinguent pas statistiquement** (voir ci-dessous) : on retient le plus simple.
+
+## Les trois interfaces
+
+Un même modèle, trois façons de l'utiliser :
+
+| Interface | Rôle | Lancer |
+|---|---|---|
+| `web/index.html` | **Dashboard front-end autonome** (HTML/CSS/JS). Appelle l'API si elle tourne (badge « Live API »), sinon calcule en local avec les coefficients du modèle | double-clic sur le fichier |
+| `app.py` | **Application interactive Streamlit** : saisie d'un patient, prédiction automatique, waterfall SHAP | `streamlit run app.py` |
+| `api/main.py` | **API FastAPI** : `GET /health`, `POST /predict`, `POST /explain`, documentation Swagger auto-générée | `uvicorn api.main:app --reload` puis `http://127.0.0.1:8000/docs` |
+
+### Dashboard web
+
+| Accueil | Résultat de prédiction |
+|---|---|
+| ![Dashboard : accueil](docs/screenshots/dashboard_home.png) | ![Dashboard : résultat de prédiction](docs/screenshots/dashboard_prediction.png) |
+
+![Dashboard : explication SHAP d'un patient](docs/screenshots/dashboard_explainability.png)
+
+L'onglet Explainability montre la cascade du patient moyen (45 %) à la prédiction (92 %), avec la probabilité cumulée à chaque étape, une phrase d'interprétation et le rappel que SHAP n'est pas causal.
+
+### Application Streamlit
+
+![Application Streamlit](docs/screenshots/streamlit_app.png)
+
+Le résultat se met à jour **automatiquement** à chaque changement d'un champ, sans bouton à cliquer. Pour chaque patient l'application affiche :
+
+- la **classe prédite**, la **probabilité de maladie** et la probabilité d'absence de maladie ;
+- le **SHAP Waterfall Plot** de ce patient ;
+- les **principales caractéristiques influentes**, avec un texte d'interprétation ;
+- deux patients exemples du jeu de test (« Risque élevé », « Risque faible ») et un bouton de réinitialisation ;
+- l'avertissement : application à visée éducative et de recherche, pas un outil de diagnostic médical.
+
+### API FastAPI et Swagger UI
+
+![Swagger UI : liste des endpoints](docs/screenshots/swagger_overview.png)
+
+![Swagger UI : requête et réponse de /predict](docs/screenshots/swagger_predict.png)
+
+| Endpoint | Rôle |
+|---|---|
+| `GET /health` | le service tourne-t-il et le modèle est-il disponible ? |
+| `POST /predict` | classe prédite et probabilités pour un patient (les champs sont validés : une valeur hors plage renvoie une erreur 422) |
+| `POST /explain` | prédiction + explication SHAP : contributions par colonne et par variable, valeur de base, unité |
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"age":58,"sex":1,"cp":3,"trestbps":130,"chol":250,"fbs":0,"restecg":0,"thalach":148,"exang":0,"oldpeak":1.4,"slope":1,"ca":0,"thal":2}'
+```
+
+```json
+{"prediction": 0, "prediction_label": "Heart disease unlikely (model estimate)",
+ "probability_disease": 0.373, "probability_no_disease": 0.627, "model_name": "Logistic Regression"}
+```
+
+Les calculs locaux du dashboard et de l'API ont été comparés sur 60 patients : écart maximal 5·10⁻⁵ sur les probabilités et sur les contributions SHAP. Un test automatique (`tests/test_dashboard_sync.py`) garde cette équivalence : si le modèle est réentraîné sans relancer `python src/export_dashboard.py`, la CI échoue au lieu de laisser le dashboard afficher des chiffres périmés. L'application Streamlit est testée avec le testeur intégré de Streamlit (`tests/test_streamlit_app.py`).
+
+_Les captures ont été réalisées avec le modèle déployé du dépôt._
 
 ## Le dataset et un piège à connaître
 
@@ -183,24 +244,6 @@ L'analyse des faux positifs et des faux négatifs avec SHAP est dans la section 
 
 Les trois modèles se rejoignent sur l'essentiel : la corrélation de rang de Spearman entre leurs importances est de 0,91 (régression logistique / forêt), 0,83 (régression logistique / XGBoost) et 0,92 (forêt / XGBoost), et trois variables sont dans le top 5 de chacun (vaisseaux colorés, type de douleur thoracique, thalassémie). Ils diffèrent sur les proportions : la thalassémie pèse 16 % pour la régression logistique contre 26 % et 25 % pour les deux modèles à arbres, tandis que la fréquence cardiaque max pèse 11 % contre 7 % et 3 %. Comme les trois modèles ont des performances statistiquement équivalentes, cet accord renforce la confiance dans l'explication, sans l'établir comme une vérité médicale.
 
-## Trois interfaces pour le même modèle
-
-| Interface | Ce qu'elle montre | Lancer |
-|---|---|---|
-| `web/index.html` | Dashboard HTML/CSS/JS. Appelle l'API si elle tourne (badge « Live API »), sinon calcule en local avec les coefficients du modèle | double-clic sur le fichier |
-| `app.py` | Prototype Streamlit tout-en-un | `streamlit run app.py` |
-| `api/main.py` | Backend FastAPI (`/predict`, `/explain`, `/health`), doc Swagger auto-générée | `uvicorn api.main:app --reload` puis `http://127.0.0.1:8000/docs` |
-
-Le dashboard et l'app Streamlit affichent, pour n'importe quel patient saisi, la prédiction, les deux probabilités, un graphique SHAP dynamique (cascade du patient moyen à la prédiction, avec la probabilité cumulée), un texte d'interprétation, et le rappel que SHAP n'est pas causal et que l'outil n'est pas un diagnostic. L'endpoint `/explain` de l'API renvoie les contributions SHAP, la valeur de base, son unité et la même note.
-
-Les calculs locaux du dashboard et de l'API ont été comparés sur 60 patients : écart maximal 5·10⁻⁵ sur les probabilités et sur les contributions SHAP. Un test automatique (`tests/test_dashboard_sync.py`) garde cette équivalence : si le modèle est réentraîné sans relancer `python src/export_dashboard.py`, la CI échoue au lieu de laisser le dashboard afficher des chiffres périmés.
-
-```bash
-curl -X POST http://127.0.0.1:8000/predict \
-  -H "Content-Type: application/json" \
-  -d '{"age":58,"sex":1,"cp":3,"trestbps":130,"chol":250,"fbs":0,"restecg":0,"thalach":148,"exang":0,"oldpeak":1.4,"slope":1,"ca":0,"thal":2}'
-```
-
 ## Structure du projet
 
 ```
@@ -214,12 +257,15 @@ heart-disease-shap/
 │   ├── evaluate.py          # validation croisée imbriquée, métriques, analyse des erreurs
 │   ├── train.py             # modèle final (tuning par CV) -> models/best_model.joblib
 │   ├── shap_utils.py        # outils SHAP partagés : agrégation par variable, texte d'interprétation
+│   ├── shap_plots.py        # SHAP waterfall officiel, partagé par explain.py et app.py
 │   ├── explain.py           # SHAP global et individuel, textes, comparaison des modèles
 │   └── export_dashboard.py  # synchronise web/index.html avec le modèle et les résultats
 ├── api/                     # FastAPI : main.py, schemas.py
 ├── web/index.html           # dashboard
-├── app.py                   # Streamlit
-├── tests/                   # 29 tests : preprocessing, anti-fuite, métriques, sélection, SHAP, API, synchro dashboard
+├── app.py                   # application Streamlit
+├── .streamlit/config.toml   # thème de l'application
+├── docs/screenshots/        # captures du dashboard, de Swagger UI et de l'application
+├── tests/                   # 35 tests : preprocessing, anti-fuite, métriques, sélection, SHAP, API, application, synchro dashboard
 ├── models/                  # best_model.joblib, results.json, graphiques SHAP
 ├── reports/                 # résultats de CV, figures, patients mal classés
 └── .github/workflows/ci.yml # tests à chaque push
@@ -234,8 +280,21 @@ python src/encoding_ablation.py   # ablation des choix d'encodage
 python src/train.py        # modèle final -> models/best_model.joblib
 python src/explain.py      # SHAP : graphiques, interprétation, comparaison des modèles (~1 min)
 python src/export_dashboard.py   # met à jour web/index.html
-pytest tests/ -v           # 29 tests
+streamlit run app.py       # application interactive
+uvicorn api.main:app --reload     # API (documentation sur /docs)
+pytest tests/ -v           # 35 tests
 ```
+
+## Déployer l'application Streamlit
+
+L'application se déploie gratuitement sur [Streamlit Community Cloud](https://share.streamlit.io) à partir de ce dépôt :
+
+1. Le dépôt GitHub doit être public et à jour (`git push`).
+2. Sur share.streamlit.io : **New app**, dépôt `dohamly/heart-disease-shap`, branche `main`, fichier principal `app.py`.
+3. **Advanced settings** : choisir Python 3.12.
+4. **Deploy**, puis copier l'adresse `https://….streamlit.app` dans la ligne « Démo en ligne » en haut de ce README.
+
+Le modèle (`models/best_model.joblib`) et les données sont dans le dépôt : l'application n'a besoin d'aucun secret. Si Streamlit Cloud signale une incompatibilité de version de scikit-learn en chargeant le modèle, relancer `python src/train.py` en local et pousser le nouveau fichier.
 
 ## Limites
 
@@ -252,6 +311,6 @@ pytest tests/ -v           # 29 tests
 - Validation externe sur les autres cohortes UCI (Hongrie, Suisse, Long Beach)
 - Réglage du seuil de décision et calibration des probabilités
 - Intervalles de confiance par bootstrap et validation croisée répétée
-- Déploiement public de l'API et du dashboard
+- Déploiement public de l'API (Render, Railway…) et du dashboard (GitHub Pages) ; l'application Streamlit a sa propre démo
 
 Dataset : [UCI Machine Learning Repository, Heart Disease](https://archive.ics.uci.edu/dataset/45/heart-disease). Projet à but pédagogique.

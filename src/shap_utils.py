@@ -26,8 +26,8 @@ CAVEAT = (
     "la maladie."
 )
 DISCLAIMER = (
-    "Projet académique : ce n'est pas un outil de diagnostic médical et il ne "
-    "doit pas servir à une décision clinique."
+    "Application à visée éducative et de recherche : ce n'est pas un outil de "
+    "diagnostic médical et elle ne doit pas servir à une décision clinique."
 )
 
 BINARY_LABELS = {

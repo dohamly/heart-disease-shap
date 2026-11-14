@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from evaluate import METRICS, compute_metrics  # noqa: E402
 from model_config import SEED, base_estimator, make_search  # noqa: E402
 from preprocessing import (  # noqa: E402
-    NUMERIC_COLS, build_preprocessed_dataset, load_data, split_and_scale, split_data,
+    build_preprocessed_dataset, load_data, split_and_scale, split_data,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

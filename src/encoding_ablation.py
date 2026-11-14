@@ -26,7 +26,6 @@ import os
 import sys
 
 import numpy as np
-import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -53,30 +52,34 @@ def ohe():
 
 def build(variant):
     """Retourne (ColumnTransformer, transformation à appliquer au DataFrame brut)."""
-    ident = lambda d: d
+
+    def keep_as_is(frame):
+        """Identity transform for the variants that need no row-level preprocessing."""
+        return frame
+
     if variant == "A":
         ct = ColumnTransformer([
             ("num", StandardScaler(), BASE_NUM + ["ca"]),
             ("cat", ohe(), CATEGORICAL_COLS),
         ], remainder="passthrough")
-        return ct, ident
+        return ct, keep_as_is
     if variant == "B":
         ct = ColumnTransformer([
             ("num", StandardScaler(), BASE_NUM),
             ("cat", ohe(), CATEGORICAL_COLS + ["ca"]),
         ], remainder="passthrough")
-        return ct, ident
+        return ct, keep_as_is
     if variant == "C":
         ct = ColumnTransformer([
             ("num", StandardScaler(), BASE_NUM + ["ca", "slope"]),
             ("cat", ohe(), ["cp", "restecg", "thal"]),
         ], remainder="passthrough")
-        return ct, ident
+        return ct, keep_as_is
     if variant == "D":
         ct = ColumnTransformer([
             ("num", StandardScaler(), BASE_NUM + ["ca"] + CATEGORICAL_COLS),
         ], remainder="passthrough")
-        return ct, ident
+        return ct, keep_as_is
     if variant == "E":
         def to_missing(d):
             d = d.copy()
